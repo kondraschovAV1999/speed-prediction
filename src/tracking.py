@@ -19,7 +19,6 @@ logger = get_logger(__name__)
 
 try:  # pragma: no cover - import availability
     import mlflow
-
     from mlflow.utils.validation import MAX_PARAM_VAL_LENGTH
 except ImportError:  # pragma: no cover
     mlflow = None
