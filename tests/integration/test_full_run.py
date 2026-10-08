@@ -121,6 +121,7 @@ def test_cli_smoke_subprocess(tmp_path):
         "scripts/train.py",
         "experiment=smoke",
         f"paths.output_root={str(out).replace(chr(92), '/')}",
+        f"data.split_manifest={str(tmp_path / 'data' / 'splits' / 'synth.json').replace(chr(92), '/')}",
         f"hydra.run.dir={str(hydra_dir).replace(chr(92), '/')}",
         "tracking.enabled=false",
     ]

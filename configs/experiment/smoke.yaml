@@ -2,6 +2,7 @@
 experiment:
   name: smoke
 data:
+  split_manifest: data/splits/synthetic_smoke_seed${experiment.seed}.json
   synthetic: {num_sequences: 6, frames_per_sequence: 60}
 training: {epochs: 2, batch_size: 16}
 benchmark: {num_warmup: 2, num_iters: 10}
