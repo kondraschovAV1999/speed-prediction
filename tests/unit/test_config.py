@@ -1,12 +1,12 @@
-"""Tests for src.config compose/validate."""
+"""Tests for src.core.config compose/validate."""
 
 from __future__ import annotations
 
 import pytest
 from omegaconf import OmegaConf
 
-from src.config import Config, compose_config, validate_config
-from src.schemas import ConfigError
+from src.core.config import Config, compose_config, validate_config
+from src.core.schemas import ConfigError
 
 
 def test_compose_default():

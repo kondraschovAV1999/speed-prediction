@@ -14,10 +14,10 @@ from pathlib import Path
 
 import numpy as np
 
-from src.evaluation import evaluate_predictions
-from src.reporting import read_predictions_csv
-from src.run_manager import load_run
-from src.visualization import generate_all_figures
+from src.core.run_manager import load_run
+from src.evaluation.metrics import evaluate_predictions
+from src.evaluation.reporting import read_predictions_csv
+from src.evaluation.visualization import generate_all_figures
 
 logger = logging.getLogger(__name__)
 

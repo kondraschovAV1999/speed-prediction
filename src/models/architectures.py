@@ -6,8 +6,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor
 
-from src.config import ModelCfg
-from src.schemas import ConfigError
+from src.core.config import ModelCfg
+from src.core.schemas import ConfigError
 
 
 class BaseSpeedModel(nn.Module):

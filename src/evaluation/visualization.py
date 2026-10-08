@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 
-from src.schemas import EvaluationResult, RunPaths  # noqa: E402
+from src.core.schemas import EvaluationResult, RunPaths  # noqa: E402
 
 
 def _save(fig, out: Path) -> None:

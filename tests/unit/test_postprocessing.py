@@ -1,4 +1,4 @@
-"""Tests for src.postprocessing (detector vectors, clip, smoothing, dataframe)."""
+"""Tests for src.inference.postprocessing (detector vectors, clip, smoothing, dataframe)."""
 
 from __future__ import annotations
 
@@ -6,8 +6,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from src.config import ClipCfg, PostprocessingCfg, SmoothingCfg, StationaryCfg
-from src.postprocessing import (
+from src.core.config import ClipCfg, PostprocessingCfg, SmoothingCfg, StationaryCfg
+from src.inference.postprocessing import (
     SpeedPostProcessor,
     StationaryDetector,
     postprocess_dataframe,

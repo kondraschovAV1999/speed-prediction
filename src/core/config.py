@@ -16,12 +16,12 @@ from typing import Any
 from hydra import compose, initialize_config_dir
 from omegaconf import DictConfig, OmegaConf
 
-from src.schemas import ConfigError
+from src.core.schemas import ConfigError
 
 logger = logging.getLogger(__name__)
 
-# Repository root: two levels up from this file (src/config.py -> <root>/).
-REPO_ROOT = Path(__file__).resolve().parents[1]
+# Repository root: three levels up (src/core/config.py -> <root>/).
+REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CONFIG_DIR = REPO_ROOT / "configs"
 
 

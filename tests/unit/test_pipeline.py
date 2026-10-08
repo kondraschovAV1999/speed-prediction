@@ -1,15 +1,15 @@
-"""Tests for src.pipeline (WP9): raw collection, streaming, parity."""
+"""Tests for src.inference.pipeline (WP9): raw collection, streaming, parity."""
 
 from __future__ import annotations
 
 import numpy as np
 from torch.utils.data import DataLoader
 
-from src.data import SpeedDataset, build_dataloaders, build_datasets
-from src.models import build_model
-from src.pipeline import StreamingSpeedEstimator, collect_raw_predictions
-from src.postprocessing import SpeedPostProcessor, postprocess_dataframe
-from src.preprocessing import build_transform, build_window_index
+from src.data.dataset import SpeedDataset, build_dataloaders, build_datasets
+from src.data.preprocessing import build_transform, build_window_index
+from src.inference.pipeline import StreamingSpeedEstimator, collect_raw_predictions
+from src.inference.postprocessing import SpeedPostProcessor, postprocess_dataframe
+from src.models.architectures import build_model
 
 
 def _make_estimator(tiny_config, model=None, sequence_id: str = ""):

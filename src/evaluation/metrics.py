@@ -11,9 +11,9 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import r2_score
 
-from src.buckets import assign_buckets, buckets_from_cfg
-from src.config import EvaluationCfg
-from src.schemas import EmptyEvaluationError, EvaluationResult
+from src.core.config import EvaluationCfg
+from src.core.schemas import EmptyEvaluationError, EvaluationResult
+from src.evaluation.buckets import assign_buckets, buckets_from_cfg
 
 
 def regression_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> dict:

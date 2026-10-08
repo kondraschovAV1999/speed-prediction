@@ -18,8 +18,8 @@ from collections import deque
 import numpy as np
 import pandas as pd
 
-from src.config import PostprocessingCfg, StationaryCfg
-from src.schemas import PostProcessResult
+from src.core.config import PostprocessingCfg, StationaryCfg
+from src.core.schemas import PostProcessResult
 
 logger = logging.getLogger(__name__)
 

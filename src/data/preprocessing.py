@@ -12,7 +12,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from src.config import PreprocessingCfg
+from src.core.config import PreprocessingCfg
 
 
 class Resize:

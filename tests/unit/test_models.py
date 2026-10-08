@@ -1,4 +1,4 @@
-"""Tests for src.models (WP4)."""
+"""Tests for src.models.architectures (WP4)."""
 
 from __future__ import annotations
 
@@ -6,9 +6,9 @@ import pytest
 import torch
 import torch.nn.functional as F
 
-from src.config import ModelCfg
-from src.models import build_model, count_parameters
-from src.schemas import ConfigError
+from src.core.config import ModelCfg
+from src.core.schemas import ConfigError
+from src.models.architectures import build_model, count_parameters
 
 
 def make_model_cfg() -> ModelCfg:

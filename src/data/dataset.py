@@ -14,10 +14,10 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader, Dataset
 
-from src.config import Config, DataCfg
-from src.logging_utils import get_logger
-from src.preprocessing import build_transform, window_frame_indices
-from src.schemas import DataValidationError, SpeedSequence
+from src.core.config import Config, DataCfg
+from src.core.logging_utils import get_logger
+from src.core.schemas import DataValidationError, SpeedSequence
+from src.data.preprocessing import build_transform, window_frame_indices
 
 logger = get_logger(__name__)
 
@@ -329,7 +329,7 @@ def _build_split_windows(
     sequences: list[SpeedSequence], data_cfg: DataCfg, stride: int
 ) -> list[tuple[int, int]]:
     """Enumerate windows for a split, dropping NaN-target windows."""
-    from src.preprocessing import build_window_index
+    from src.data.preprocessing import build_window_index
 
     seq_lengths = [len(s.frames) for s in sequences]
     windows: list[tuple[int, int]] = []

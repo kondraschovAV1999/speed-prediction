@@ -1,4 +1,4 @@
-"""Tests for src.run_manager."""
+"""Tests for src.core.run_manager."""
 
 from __future__ import annotations
 
@@ -11,8 +11,8 @@ import numpy as np
 import torch
 from omegaconf import OmegaConf
 
-import src.run_manager as rm
-from src.run_manager import (
+import src.core.run_manager as rm
+from src.core.run_manager import (
     collect_environment,
     create_run,
     load_run,
@@ -89,7 +89,7 @@ def test_load_run_roundtrip(tiny_config):
 def test_load_run_missing_raises(tiny_config):
     import pytest
 
-    from src.schemas import ConfigError
+    from src.core.schemas import ConfigError
 
     with pytest.raises(ConfigError):
         load_run("does_not_exist", Path(tiny_config.paths.output_root))

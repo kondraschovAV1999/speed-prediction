@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 import torch
 
-from src.schemas import SpeedPrediction
+from src.core.schemas import SpeedPrediction
 
 logger = logging.getLogger(__name__)
 

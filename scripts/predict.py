@@ -15,13 +15,13 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from src.config import compose_config, validate_config
-from src.pipeline import StreamingSpeedEstimator
-from src.postprocessing import SpeedPostProcessor
-from src.preprocessing import build_transform
-from src.reporting import write_predictions_csv
-from src.run_manager import create_run, update_metadata
-from src.training import load_model_from_checkpoint
+from src.core.config import compose_config, validate_config
+from src.core.run_manager import create_run, update_metadata
+from src.data.preprocessing import build_transform
+from src.evaluation.reporting import write_predictions_csv
+from src.inference.pipeline import StreamingSpeedEstimator
+from src.inference.postprocessing import SpeedPostProcessor
+from src.models.training import load_model_from_checkpoint
 
 logger = logging.getLogger(__name__)
 

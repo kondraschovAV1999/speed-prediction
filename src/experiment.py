@@ -11,31 +11,31 @@ import numpy as np
 import pandas as pd
 from omegaconf import DictConfig, OmegaConf
 
-from src.benchmark import benchmark_end_to_end, benchmark_model
-from src.config import Config, validate_config
-from src.data import build_dataloaders, build_datasets
-from src.evaluation import evaluate_predictions
-from src.logging_utils import setup_logging
-from src.models import build_model, count_parameters
-from src.pipeline import StreamingSpeedEstimator, collect_raw_predictions
-from src.postprocessing import SpeedPostProcessor, postprocess_dataframe
-from src.preprocessing import build_transform
-from src.reporting import write_metrics_json, write_predictions_csv
-from src.run_manager import (
+from src.core.config import Config, validate_config
+from src.core.logging_utils import setup_logging
+from src.core.run_manager import (
     collect_environment,
     create_run,
     set_seed,
     update_metadata,
     write_metadata,
 )
-from src.schemas import RunPaths
-from src.tracking import create_tracker
-from src.training import (
+from src.core.schemas import RunPaths
+from src.data.dataset import build_dataloaders, build_datasets
+from src.data.preprocessing import build_transform
+from src.evaluation.benchmark import benchmark_end_to_end, benchmark_model
+from src.evaluation.metrics import evaluate_predictions
+from src.evaluation.reporting import write_metrics_json, write_predictions_csv
+from src.evaluation.visualization import generate_all_figures
+from src.inference.pipeline import StreamingSpeedEstimator, collect_raw_predictions
+from src.inference.postprocessing import SpeedPostProcessor, postprocess_dataframe
+from src.models.architectures import build_model, count_parameters
+from src.models.training import (
     SpeedLightningModule,
     build_trainer,
     load_model_from_checkpoint,
 )
-from src.visualization import generate_all_figures
+from src.tracking.tracker import create_tracker
 
 logger = logging.getLogger(__name__)
 

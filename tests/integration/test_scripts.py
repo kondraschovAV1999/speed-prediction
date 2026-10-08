@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 from omegaconf import OmegaConf
 
-from src.config import compose_config
+from src.core.config import compose_config
 from src.experiment import run_experiment
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -62,8 +62,8 @@ def test_visualize_script(trained):
 def test_predict_script(trained, tmp_path):
     tmp, paths = trained
     # Build a frame folder from synthetic frames.
-    from src.config import validate_config
-    from src.data import generate_synthetic_sequences
+    from src.core.config import validate_config
+    from src.data.dataset import generate_synthetic_sequences
 
     cfg = validate_config(compose_config(["experiment=smoke"]))
     cfg.data.synthetic.num_sequences = 1

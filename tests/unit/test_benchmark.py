@@ -1,12 +1,12 @@
-"""Tests for src.benchmark (WP9)."""
+"""Tests for src.evaluation.benchmark (WP9)."""
 
 from __future__ import annotations
 
 import numpy as np
 import torch
 
-from src.benchmark import benchmark_end_to_end, benchmark_model
-from src.models import build_model
+from src.evaluation.benchmark import benchmark_end_to_end, benchmark_model
+from src.models.architectures import build_model
 
 
 def make_model(tiny_config):
@@ -34,9 +34,9 @@ def test_benchmark_model_eval_and_no_grad(tiny_config):
 
 
 def test_benchmark_end_to_end(tiny_config):
-    from src.pipeline import StreamingSpeedEstimator
-    from src.postprocessing import SpeedPostProcessor
-    from src.preprocessing import build_transform
+    from src.data.preprocessing import build_transform
+    from src.inference.pipeline import StreamingSpeedEstimator
+    from src.inference.postprocessing import SpeedPostProcessor
 
     model = make_model(tiny_config)
     transform = build_transform(tiny_config.preprocessing)

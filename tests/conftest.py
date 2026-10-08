@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from src.config import Config, compose_config, validate_config
+from src.core.config import Config, compose_config, validate_config
 
 
 @pytest.fixture

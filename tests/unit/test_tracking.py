@@ -1,4 +1,4 @@
-"""Tests for src.tracking (WP8)."""
+"""Tests for src.tracking.tracker (WP8)."""
 
 from __future__ import annotations
 
@@ -6,10 +6,10 @@ from pathlib import Path
 
 import pytest
 
-import src.tracking as trk
-from src.config import Config, ExperimentCfg, MLflowCfg, PathsCfg, TrackingCfg
-from src.run_manager import create_run
-from src.tracking import (
+import src.tracking.tracker as trk
+from src.core.config import Config, ExperimentCfg, MLflowCfg, PathsCfg, TrackingCfg
+from src.core.run_manager import create_run
+from src.tracking.tracker import (
     MLflowTracker,
     NoOpTracker,
     _flatten_params,
@@ -46,7 +46,7 @@ def test_flatten_params_dotted_keys():
 
 
 def test_flatten_params_truncates_long_values():
-    from src.tracking import MAX_PARAM_VAL_LENGTH
+    from src.tracking.tracker import MAX_PARAM_VAL_LENGTH
 
     flat = _flatten_params({"k": "x" * (MAX_PARAM_VAL_LENGTH + 1000)})
     assert len(flat["k"]) <= MAX_PARAM_VAL_LENGTH

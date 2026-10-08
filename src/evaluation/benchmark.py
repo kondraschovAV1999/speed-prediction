@@ -7,8 +7,8 @@ import time
 import numpy as np
 import torch
 
-from src.evaluation import latency_summary
-from src.pipeline import resolve_device
+from src.evaluation.metrics import latency_summary
+from src.inference.pipeline import resolve_device
 
 
 def benchmark_model(

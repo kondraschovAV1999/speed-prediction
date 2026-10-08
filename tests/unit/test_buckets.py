@@ -1,13 +1,13 @@
-"""Tests for src.buckets (bucket assignment and config parsing)."""
+"""Tests for src.evaluation.buckets (bucket assignment and config parsing)."""
 
 from __future__ import annotations
 
 import numpy as np
 import pytest
 
-from src.buckets import BucketSpec, assign_buckets, buckets_from_cfg
-from src.config import BucketCfg, EvaluationCfg
-from src.schemas import ConfigError
+from src.core.config import BucketCfg, EvaluationCfg
+from src.core.schemas import ConfigError
+from src.evaluation.buckets import BucketSpec, assign_buckets, buckets_from_cfg
 
 BUCKETS = [
     BucketSpec("low", 0.0, 15.0),

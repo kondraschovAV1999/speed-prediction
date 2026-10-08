@@ -1,4 +1,4 @@
-"""Tests for src.reporting (WP7)."""
+"""Tests for src.evaluation.reporting (WP7)."""
 
 from __future__ import annotations
 
@@ -7,10 +7,10 @@ import json
 import numpy as np
 import pandas as pd
 
-from src.config import BucketCfg, EvaluationCfg
-from src.evaluation import evaluate_predictions
-from src.reporting import read_predictions_csv, write_metrics_json, write_predictions_csv
-from src.schemas import RunPaths
+from src.core.config import BucketCfg, EvaluationCfg
+from src.core.schemas import RunPaths
+from src.evaluation.metrics import evaluate_predictions
+from src.evaluation.reporting import read_predictions_csv, write_metrics_json, write_predictions_csv
 
 
 def make_paths(tmp_path) -> RunPaths:

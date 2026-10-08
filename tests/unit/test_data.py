@@ -1,4 +1,4 @@
-"""Tests for src.data (WP2): synthetic data, validation, splits."""
+"""Tests for src.data.dataset (WP2): synthetic data, validation, splits."""
 
 from __future__ import annotations
 
@@ -10,8 +10,9 @@ import numpy as np
 import pytest
 import torch
 
-from src.config import DataCfg, SyntheticCfg
-from src.data import (
+from src.core.config import DataCfg, SyntheticCfg
+from src.core.schemas import DataValidationError, SpeedSequence
+from src.data.dataset import (
     InMemoryFrames,
     assert_no_leakage,
     generate_synthetic_sequences,
@@ -19,7 +20,6 @@ from src.data import (
     make_group_split,
     validate_sequence,
 )
-from src.schemas import DataValidationError, SpeedSequence
 
 
 def make_seq(
@@ -227,7 +227,7 @@ class TestDataset:
     """WP3 additions: SpeedDataset + build_datasets + build_dataloaders."""
 
     def test_build_datasets_item_shapes_and_dtypes(self, tiny_config):
-        from src.data import build_datasets
+        from src.data.dataset import build_datasets
 
         datasets = build_datasets(tiny_config, seed=42)
         t = tiny_config.data.sequence_length
@@ -251,7 +251,7 @@ class TestDataset:
             assert isinstance(item["sequence_id"], str)
 
     def test_label_equals_speed_at_end(self, tiny_config):
-        from src.data import build_datasets
+        from src.data.dataset import build_datasets
 
         datasets = build_datasets(tiny_config, seed=42)
         ds = datasets["val"]
@@ -263,7 +263,7 @@ class TestDataset:
             )
 
     def test_no_group_overlap_between_splits(self, tiny_config):
-        from src.data import build_datasets
+        from src.data.dataset import build_datasets
 
         datasets = build_datasets(tiny_config, seed=42)
         groups = {name: {s.group_id for s in ds.sequences} for name, ds in datasets.items()}
@@ -272,14 +272,14 @@ class TestDataset:
         assert not (groups["val"] & groups["test"])
 
     def test_eval_stride_not_one_raises(self, tiny_config):
-        from src.data import build_datasets
+        from src.data.dataset import build_datasets
 
         tiny_config.data.window_stride = 2
         with pytest.raises(DataValidationError):
             build_datasets(tiny_config, seed=42)
 
     def test_build_dataloaders(self, tiny_config):
-        from src.data import build_dataloaders, build_datasets
+        from src.data.dataset import build_dataloaders, build_datasets
 
         datasets = build_datasets(tiny_config, seed=42)
         loaders = build_dataloaders(datasets, tiny_config)

@@ -7,10 +7,10 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from src.schemas import ConfigError
+from src.core.schemas import ConfigError
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
-    from src.config import EvaluationCfg
+    from src.core.config import EvaluationCfg
 
 
 @dataclass(frozen=True)

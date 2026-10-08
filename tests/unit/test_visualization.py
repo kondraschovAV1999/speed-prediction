@@ -1,14 +1,14 @@
-"""Tests for src.visualization (WP7)."""
+"""Tests for src.evaluation.visualization (WP7)."""
 
 from __future__ import annotations
 
 import numpy as np
 import pandas as pd
 
-from src.config import BucketCfg, EvaluationCfg
-from src.evaluation import evaluate_predictions
-from src.schemas import RunPaths
-from src.visualization import (
+from src.core.config import BucketCfg, EvaluationCfg
+from src.core.schemas import RunPaths
+from src.evaluation.metrics import evaluate_predictions
+from src.evaluation.visualization import (
     generate_all_figures,
     plot_error_distribution,
     plot_predicted_vs_actual,

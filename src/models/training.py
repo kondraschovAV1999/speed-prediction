@@ -12,9 +12,9 @@ from lightning.pytorch.callbacks import EarlyStopping, ModelCheckpoint
 from lightning.pytorch.loggers import CSVLogger
 from torch import Tensor
 
-from src.config import Config, ModelCfg, TrainingCfg
-from src.models import BaseSpeedModel, build_model
-from src.schemas import RunPaths
+from src.core.config import Config, ModelCfg, TrainingCfg
+from src.core.schemas import RunPaths
+from src.models.architectures import BaseSpeedModel, build_model
 
 
 class SpeedLightningModule(L.LightningModule):

@@ -1,4 +1,4 @@
-"""Tests for src.training (WP4): LightningModule + trainer builder + checkpoint."""
+"""Tests for src.models.training (WP4): LightningModule + trainer builder + checkpoint."""
 
 from __future__ import annotations
 
@@ -6,10 +6,10 @@ from pathlib import Path
 
 import torch
 
-from src.config import ModelCfg, TrainingCfg
-from src.models import build_model
-from src.run_manager import create_run
-from src.training import (
+from src.core.config import ModelCfg, TrainingCfg
+from src.core.run_manager import create_run
+from src.models.architectures import build_model
+from src.models.training import (
     SpeedLightningModule,
     build_trainer,
     load_model_from_checkpoint,

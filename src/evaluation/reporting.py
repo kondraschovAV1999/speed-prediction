@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from src.schemas import EvaluationResult, RunPaths, _json_safe
+from src.core.schemas import EvaluationResult, RunPaths, _json_safe
 
 # Canonical predictions-table column order (docs/PLAN.md section 5.4).
 _CANONICAL_COLUMNS = [

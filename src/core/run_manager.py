@@ -16,9 +16,9 @@ import lightning as L
 import torch
 from omegaconf import OmegaConf
 
-from src.config import Config, validate_config
-from src.logging_utils import get_logger
-from src.schemas import ConfigError, RunPaths
+from src.core.config import Config, validate_config
+from src.core.logging_utils import get_logger
+from src.core.schemas import ConfigError, RunPaths
 
 logger = get_logger(__name__)
 

@@ -1,11 +1,11 @@
-"""Tests for src.logging_utils."""
+"""Tests for src.core.logging_utils."""
 
 from __future__ import annotations
 
 import logging
 from pathlib import Path
 
-from src.logging_utils import get_logger, setup_logging
+from src.core.logging_utils import get_logger, setup_logging
 
 
 def _flush() -> None:

@@ -1,4 +1,4 @@
-"""Tests for src.evaluation metrics."""
+"""Tests for src.evaluation.metrics metrics."""
 
 from __future__ import annotations
 
@@ -8,14 +8,14 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from src.config import BucketCfg, EvaluationCfg
-from src.evaluation import (
+from src.core.config import BucketCfg, EvaluationCfg
+from src.core.schemas import EmptyEvaluationError
+from src.evaluation.metrics import (
     evaluate_predictions,
     latency_summary,
     regression_metrics,
     stationary_metrics,
 )
-from src.schemas import EmptyEvaluationError
 
 
 def _eval_cfg() -> EvaluationCfg:

@@ -1,12 +1,12 @@
-"""Tests for src.preprocessing (transforms + window indexing)."""
+"""Tests for src.data.preprocessing (transforms + window indexing)."""
 
 from __future__ import annotations
 
 import numpy as np
 import torch
 
-from src.config import PreprocessingCfg
-from src.preprocessing import (
+from src.core.config import PreprocessingCfg
+from src.data.preprocessing import (
     Compose,
     Normalize,
     Resize,

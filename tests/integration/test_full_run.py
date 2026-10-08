@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 from omegaconf import OmegaConf
 
-from src.config import compose_config
+from src.core.config import compose_config
 from src.experiment import run_experiment
 
 

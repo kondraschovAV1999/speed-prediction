@@ -1,4 +1,4 @@
-"""Tests for src.schemas (dataclass construction and JSON serialization)."""
+"""Tests for src.core.schemas (dataclass construction and JSON serialization)."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import json
 import math
 from pathlib import Path
 
-from src.schemas import (
+from src.core.schemas import (
     EvaluationResult,
     PostProcessResult,
     RunPaths,
