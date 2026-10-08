@@ -1,0 +1,83 @@
+defaults:
+  - _self_
+  - dataset: synthetic
+  - model: tiny_cnn_gru
+  - experiment: baseline
+  - override hydra/job_logging: disabled   # we configure logging ourselves
+  - override hydra/hydra_logging: disabled
+
+hydra:
+  run:
+    dir: output/hydra/${now:%Y%m%d_%H%M%S}   # keep Hydra's own files under output/
+  job:
+    chdir: false                              # never change the working directory
+  output_subdir: null
+
+paths:
+  output_root: output
+  data_root: data
+
+experiment:
+  name: baseline
+  seed: 42
+  deterministic: false      # true => torch.use_deterministic_algorithms(True, warn_only=True)
+
+# `data` is provided by the dataset group (see dataset/synthetic.yaml)
+
+preprocessing:
+  image_size: [32, 32]      # [H, W]
+  normalize: true
+  mean: [0.485, 0.456, 0.406]   # fixed constants, NOT fitted on data
+  std:  [0.229, 0.224, 0.225]
+
+# `model` is provided by the model group
+
+training:
+  batch_size: 32
+  epochs: 5
+  learning_rate: 0.0001
+  weight_decay: 0.00001
+  optimizer: adamw
+  loss: mse                 # mse | l1   (huber etc. are future work)
+  monitor: val/mae_mph
+  early_stopping_patience: 5
+  gradient_clip_val: null
+  accelerator: auto
+  devices: 1
+  precision: "32-true"
+  num_workers: 0
+
+postprocessing:
+  clip:      {enabled: true, min_mph: 0.0, max_mph: null}
+  smoothing: {method: none, ema_alpha: 0.5, median_window: 5}   # none | ema | median (causal)
+  stationary:
+    enabled: true
+    enter_threshold_mph: 2.0      # speed <= enter for N consecutive frames -> STOPPED
+    exit_threshold_mph: 2.5       # speed >  exit  for M consecutive frames -> MOVING
+    enter_persistence_frames: 3
+    exit_persistence_frames: 3
+    initial_state: moving
+
+evaluation:
+  stationary_label_threshold_mph: 2.0   # ground truth only: true_stationary = true_speed <= this
+  speed_buckets:                        # lower bound inclusive, upper exclusive
+    - {name: low,    min_mph: 0,  max_mph: 15}
+    - {name: medium, min_mph: 15, max_mph: 45}
+    - {name: high,   min_mph: 45, max_mph: null}
+  splits_to_evaluate: [val, test]
+
+benchmark:
+  enabled: true
+  device: auto
+  num_warmup: 10
+  num_iters: 100
+
+tracking:
+  enabled: true
+  backend: mlflow
+  mlflow:
+    tracking_uri: null        # null => local store under output/mlflow (see WP8)
+    experiment_name: speed-estimation
+
+logging:
+  level: INFO

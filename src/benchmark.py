@@ -1,0 +1,1 @@
+"""Runtime benchmark (WP9)."""

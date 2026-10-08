@@ -216,3 +216,24 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# --- Project-specific ignores (speed-estimation pipeline) ---
+# All generated artifacts live under output/
+output/
+# Data contents are git-ignored; keep the directory scaffolding via .gitkeep
+data/raw/*
+data/interim/*
+data/processed/*
+data/splits/*
+!data/raw/.gitkeep
+!data/interim/.gitkeep
+!data/processed/.gitkeep
+!data/splits/.gitkeep
+# Framework stray output (must never appear in repo root)
+mlruns/
+outputs/
+lightning_logs/
+# Conda local state
+.conda/
+# JetBrains
+.idea/
