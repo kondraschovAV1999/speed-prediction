@@ -186,3 +186,20 @@ def run_experiment(cfg: DictConfig) -> RunPaths:
         update_metadata(paths, status="failed", error=traceback.format_exc())
         tracker.finish("FAILED")
         raise
+
+
+def evaluate_run(paths: RunPaths, cfg: Config) -> dict:
+    """Re-run evaluation from the best checkpoint without re-training (WP11).
+
+    Returns ``{split_name: EvaluationResult}``.
+    """
+    datasets = build_datasets(cfg, cfg.experiment.seed, run_split_path=paths.split_path)
+    loaders = build_dataloaders(datasets, cfg)
+    best = paths.checkpoints_dir / "best.ckpt"
+    model = load_model_from_checkpoint(best, cfg.model)
+    results: dict = {}
+    for split_name in cfg.evaluation.splits_to_evaluate:
+        raw = collect_raw_predictions(model, loaders[split_name], "cpu", split_name)
+        final = postprocess_dataframe(raw, cfg.postprocessing)
+        results[split_name] = evaluate_predictions(final, cfg.evaluation, split_name)
+    return results
