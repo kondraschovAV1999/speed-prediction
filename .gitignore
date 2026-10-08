@@ -237,3 +237,6 @@ lightning_logs/
 .conda/
 # JetBrains
 .idea/
+
+# Scratch/helper scripts at repo root (underscore-prefixed)
+/_*.py
