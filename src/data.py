@@ -11,9 +11,12 @@ from collections.abc import Sequence
 from pathlib import Path
 
 import numpy as np
+import torch
+from torch.utils.data import DataLoader, Dataset
 
-from src.config import DataCfg
+from src.config import Config, DataCfg
 from src.logging_utils import get_logger
+from src.preprocessing import build_transform, window_frame_indices
 from src.schemas import DataValidationError, SpeedSequence
 
 logger = get_logger(__name__)
@@ -282,3 +285,125 @@ def load_or_create_split(
     payload = {"seed": seed, "ratios": cfg.split_ratios, "splits": split}
     run_split_path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
     return split
+
+
+# --------------------------------------------------------------------------- #
+# Dataset and dataloaders (WP3)
+# --------------------------------------------------------------------------- #
+class SpeedDataset(Dataset):
+    """Maps a window index over a list of sequences to ``(frames, target, meta)``."""
+
+    def __init__(
+        self,
+        sequences: list[SpeedSequence],
+        window_index: list[tuple[int, int]],
+        transform,
+        sequence_length: int,
+        frame_step: int,
+    ):
+        self.sequences = sequences
+        self.window_index = window_index
+        self.transform = transform
+        self.sequence_length = sequence_length
+        self.frame_step = frame_step
+
+    def __len__(self) -> int:
+        return len(self.window_index)
+
+    def __getitem__(self, index: int) -> dict:
+        seq_idx, end_idx = self.window_index[index]
+        seq = self.sequences[seq_idx]
+        indices = window_frame_indices(end_idx, self.sequence_length, self.frame_step)
+        frames = seq.frames.get(indices)  # uint8 [T, H, W, C]
+        frames_tensor = torch.stack([self.transform(frame) for frame in frames])
+        return {
+            "frames": frames_tensor,  # [T, C, H, W]
+            "target_mph": torch.tensor(seq.speeds_mph[end_idx], dtype=torch.float32),
+            "timestamp": torch.tensor(seq.timestamps[end_idx], dtype=torch.float64),
+            "frame_index": torch.tensor(end_idx, dtype=torch.int64),
+            "sequence_id": seq.sequence_id,
+        }
+
+
+def _build_split_windows(
+    sequences: list[SpeedSequence], data_cfg: DataCfg, stride: int
+) -> list[tuple[int, int]]:
+    """Enumerate windows for a split, dropping NaN-target windows."""
+    from src.preprocessing import build_window_index
+
+    seq_lengths = [len(s.frames) for s in sequences]
+    windows: list[tuple[int, int]] = []
+    dropped_nan = 0
+    for seq_idx, end_idx in build_window_index(
+        seq_lengths, data_cfg.sequence_length, stride, data_cfg.frame_step
+    ):
+        if np.isnan(sequences[seq_idx].speeds_mph[end_idx]):
+            dropped_nan += 1
+            continue
+        windows.append((seq_idx, end_idx))
+    if dropped_nan:
+        logger.info("event=nan_windows_dropped count=%d", dropped_nan)
+    return windows
+
+
+def build_datasets(
+    cfg: Config, seed: int, run_split_path: Path | None = None
+) -> dict[str, SpeedDataset]:
+    """Generate/validate synthetic sequences, split, and build per-split datasets."""
+    data_cfg = cfg.data
+
+    if data_cfg.window_stride != 1:
+        raise DataValidationError(
+            f"window_stride={data_cfg.window_stride} is not supported: "
+            "evaluation splits (val/test) require stride 1"
+        )
+
+    sequences = generate_synthetic_sequences(data_cfg, seed)
+    validated: list[SpeedSequence] = []
+    for seq in sequences:
+        validated.extend(validate_sequence(seq, data_cfg))
+
+    if run_split_path is None:
+        run_split_path = Path(data_cfg.split_manifest).with_name("split_run.json")
+    split = load_or_create_split(validated, data_cfg, seed, run_split_path)
+
+    transform = build_transform(cfg.preprocessing)
+    datasets: dict[str, SpeedDataset] = {}
+    for split_name in ("train", "val", "test"):
+        split_sequences = [s for s in validated if s.group_id in split[split_name]]
+        windows = _build_split_windows(split_sequences, data_cfg, stride=1)
+        if not windows:
+            raise DataValidationError(
+                f"split {split_name!r} produced zero windows "
+                "(sequences too short or all labels NaN)"
+            )
+        datasets[split_name] = SpeedDataset(
+            split_sequences,
+            windows,
+            transform,
+            data_cfg.sequence_length,
+            data_cfg.frame_step,
+        )
+
+    logger.info(
+        "event=dataset_sizes train=%d val=%d test=%d",
+        len(datasets["train"]),
+        len(datasets["val"]),
+        len(datasets["test"]),
+    )
+    return datasets
+
+
+def build_dataloaders(datasets: dict[str, SpeedDataset], cfg: Config) -> dict[str, DataLoader]:
+    """Build DataLoaders: train shuffled with ``drop_last``, val/test unshuffled."""
+    loaders: dict[str, DataLoader] = {}
+    for split_name, dataset in datasets.items():
+        is_train = split_name == "train"
+        loaders[split_name] = DataLoader(
+            dataset,
+            batch_size=cfg.training.batch_size,
+            shuffle=is_train,
+            drop_last=is_train,
+            num_workers=cfg.training.num_workers,
+        )
+    return loaders

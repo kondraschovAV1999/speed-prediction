@@ -8,6 +8,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+import torch
 
 from src.config import DataCfg, SyntheticCfg
 from src.data import (
@@ -220,3 +221,73 @@ def test_load_or_create_split_mismatched_groups_raises(tmp_path: Path):
     seqs2 = [make_seq([0.0, 0.1], [1.0, 2.0], group_id=f"g{i + 10}") for i in range(6)]
     with pytest.raises(DataValidationError):
         load_or_create_split(seqs2, cfg, seed=42, run_split_path=tmp_path / "s2.json")
+
+
+class TestDataset:
+    """WP3 additions: SpeedDataset + build_datasets + build_dataloaders."""
+
+    def test_build_datasets_item_shapes_and_dtypes(self, tiny_config):
+        from src.data import build_datasets
+
+        datasets = build_datasets(tiny_config, seed=42)
+        t = tiny_config.data.sequence_length
+        h, w = tiny_config.preprocessing.image_size
+        for split_name in ("train", "val", "test"):
+            ds = datasets[split_name]
+            assert len(ds) > 0
+            item = ds[0]
+            assert set(item) == {
+                "frames",
+                "target_mph",
+                "timestamp",
+                "frame_index",
+                "sequence_id",
+            }
+            assert item["frames"].shape == (t, 3, h, w)
+            assert item["frames"].dtype == torch.float32
+            assert item["target_mph"].dtype == torch.float32
+            assert item["timestamp"].dtype == torch.float64
+            assert item["frame_index"].dtype == torch.int64
+            assert isinstance(item["sequence_id"], str)
+
+    def test_label_equals_speed_at_end(self, tiny_config):
+        from src.data import build_datasets
+
+        datasets = build_datasets(tiny_config, seed=42)
+        ds = datasets["val"]
+        for i in range(len(ds)):
+            item = ds[i]
+            seq_idx, end_idx = ds.window_index[i]
+            assert item["target_mph"].item() == pytest.approx(
+                ds.sequences[seq_idx].speeds_mph[end_idx]
+            )
+
+    def test_no_group_overlap_between_splits(self, tiny_config):
+        from src.data import build_datasets
+
+        datasets = build_datasets(tiny_config, seed=42)
+        groups = {name: {s.group_id for s in ds.sequences} for name, ds in datasets.items()}
+        assert not (groups["train"] & groups["val"])
+        assert not (groups["train"] & groups["test"])
+        assert not (groups["val"] & groups["test"])
+
+    def test_eval_stride_not_one_raises(self, tiny_config):
+        from src.data import build_datasets
+
+        tiny_config.data.window_stride = 2
+        with pytest.raises(DataValidationError):
+            build_datasets(tiny_config, seed=42)
+
+    def test_build_dataloaders(self, tiny_config):
+        from src.data import build_dataloaders, build_datasets
+
+        datasets = build_datasets(tiny_config, seed=42)
+        loaders = build_dataloaders(datasets, tiny_config)
+        assert set(loaders) == {"train", "val", "test"}
+        # batch dict contract
+        batch = next(iter(loaders["train"]))
+        t = tiny_config.data.sequence_length
+        h, w = tiny_config.preprocessing.image_size
+        assert batch["frames"].shape == (tiny_config.training.batch_size, t, 3, h, w)
+        assert batch["target_mph"].shape == (tiny_config.training.batch_size,)
+        assert isinstance(batch["sequence_id"], list)
