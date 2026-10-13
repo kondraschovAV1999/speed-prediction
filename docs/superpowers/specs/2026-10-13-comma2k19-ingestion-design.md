@@ -53,6 +53,43 @@ optimizer fuses **Vision** (the camera itself), the label is not strictly
 independent of the input frames — a mild circularity for speed-from-video. On
 open highway GNSS/INS dominate; record this in `docs/DECISIONS.md`.
 
+### 2.2 File inventory
+
+Full tree (verified locally on `Chunk_1`, RAV4):
+
+```text
+data/raw/Chunk_1/
+└── b0c9d2329ad1606b_<date>--<time>/        # route: "|" became "_"
+    └── <seg>/                               # 1-minute segment (0–N)
+        ├── video.hevc        # H.265, 20 fps, 1200 frames, ~37 MB, BGR
+        ├── preview.png       # full-res first frame, ~497 KB
+        ├── raw_log.bz2       # raw capnp CAN log, ~6.9 MB (not used here)
+        ├── processed_log/
+        │   ├── CAN/    {radar, raw_can, speed, steering_angle, wheel_speed}
+        │   ├── GNSS/   {live_gnss_qcom, live_gnss_ublox, raw_gnss_qcom, raw_gnss_ublox}
+        │   └── IMU/    {acceleration, gyro, gyro_bias, gyro_uncalibrated, magnetic, magnetic_uncalibrated}
+        └── global_pose/
+            ├── frame_times         (1200,)   float64  boot seconds, dt = 0.05 s
+            ├── frame_velocities    (1200, 3) float64  ECEF velocity (m/s)
+            ├── frame_positions     (1200, 3) float64  ECEF position (m)
+            ├── frame_orientations  (1200, 4) float64  quaternion (Hamilton)
+            └── frame_gps_times     (1200, 2) float64  [gps week, time-of-week]
+```
+
+Notes:
+
+- Every `global_pose` entry is a `.npy` file (extensions omitted above for
+  brevity). Shapes/dtypes above were verified directly; `video.hevc` decodes all
+  1200 frames via OpenCV 5.0 as `(874,1164,3)` uint8 BGR.
+- **Verified locally:** `frame_times/velocities/positions/orientations/gps_times`
+  shapes and dtypes; the `processed_log/CAN/` listing; full video decode.
+  **From the dataset README (not read by this work):** the GNSS/IMU contents.
+- **Naming discrepancies vs the README:** the README calls CAN speed `car_speed`
+  and wheel speeds `wheel_speeds`, but the actual files are `speed` and
+  `wheel_speed`; the README's `global_pos/` is actually `global_pose/`.
+- Only `video.hevc` + `frame_times` + `frame_velocities` are consumed in M2-a.
+  Everything else is unused and kept for future phases (CAN baselines, etc.).
+
 ## 3. Decisions
 
 | ID | Decision |
@@ -206,7 +243,94 @@ max_speed_mph: 200
   skipped when `data/raw/Chunk_1` absent): one segment decodes 1200 frames,
   speeds finite, mph conversion, dt = 0.05 s.
 
-## 11. Non-goals (deferred to M2-b…M2-f)
+## 11. Outputs at each stage (worked examples)
+
+### Stage 0 — raw (input, not produced by us)
+
+The segment tree shown in §2.2.
+
+### Stage 1 — cache (`scripts/preprocess.py`)
+
+Per segment: `data/interim/comma2k19/b0c9d2329ad1606b_2018-08-02--08-34-47__40.npz`
+
+```python
+npz.files == ["frames", "speeds_mph", "timestamps"]
+npz["frames"].shape    # (1200, 128, 128, 3) uint8, RGB
+npz["speeds_mph"]      # float64 (1200,)  e.g. [17.76, 17.93, 18.09, ...]
+npz["timestamps"]      # float64 (1200,)  e.g. [46408.547, 46408.597, ...]
+```
+
+Manifest: `data/interim/comma2k19/manifest.json`
+
+```json
+{
+  "cache_image_size": [128, 128],
+  "segments": {
+    "b0c9d2329ad1606b_2018-08-02--08-34-47/40": {
+      "file": "b0c9d2329ad1606b_2018-08-02--08-34-47__40.npz",
+      "n_frames": 1200,
+      "group_id": "b0c9d2329ad1606b_2018-08-02--08-34-47"
+    }
+  }
+}
+```
+
+### Stage 2 — `SpeedSequence` (`load_comma2k19_sequences`)
+
+```python
+SpeedSequence(
+    sequence_id="b0c9d2329ad1606b_2018-08-02--08-34-47/40",
+    group_id="b0c9d2329ad1606b_2018-08-02--08-34-47",
+    frames=CachedFrameSource(path=..., n_frames=1200),   # FrameSource, lazy
+    speeds_mph=array([17.76, 17.93, 18.09, ...]),         # (1200,) float64
+    timestamps=array([46408.547, 46408.597, ...]),        # (1200,) float64
+)
+```
+
+### Stage 3 — validation + split (existing code)
+
+Split manifest `data/splits/comma2k19_seed42.json`, keyed by **route/group**:
+
+```json
+{
+  "seed": 42,
+  "ratios": {"train": 0.7, "val": 0.15, "test": 0.15},
+  "splits": {
+    "train": ["b0c9d2329ad1606b_2018-07-27--06-03-57", "..."],
+    "val":   ["b0c9d2329ad1606b_2018-07-29--11-17-20", "..."],
+    "test":  ["b0c9d2329ad1606b_2018-08-14--10-32-01", "..."]
+  }
+}
+```
+
+(Gap-splitting would emit `<id>#<k>` children; rare on continuous highway data.)
+
+### Stage 4 — dataset window / batch (existing `SpeedDataset`)
+
+One `__getitem__` sample — a window of `T=10` frames ending at `frame_index`:
+
+```python
+{
+    "frames":      torch.float32 [10, 3, 32, 32],   # Resize→ToTensor→Normalize
+    "target_mph":  torch.float32 scalar,            # speed at the window's LAST frame
+    "timestamp":   torch.float64 scalar,
+    "frame_index": torch.int64 scalar,              # e.g. 9
+    "sequence_id": "b0c9d2329ad1606b_2018-08-02--08-34-47/40",
+}
+```
+
+After `build_dataloaders` (batching): `frames` → `[B, 10, 3, 32, 32]`, the rest → `[B]`.
+
+### Stage 5 — downstream (existing, **not** produced by this work)
+
+`predictions.csv` columns are unchanged; shown for context only:
+
+```csv
+split,sequence_id,frame_index,timestamp,true_speed_mph,raw_speed_mph,final_speed_mph,stationary_pred,inference_ms
+test,b0c9d2329ad1606b_2018-08-02--08-34-47/40,9,46408.547,17.93,17.6,17.6,False,
+```
+
+## 12. Non-goals (deferred to M2-b…M2-f)
 
 Real-data training, deployable baselines, CNN+LSTM, stationary study, runtime
 benchmark, and the accuracy implication of the "high" bucket being nearly empty
