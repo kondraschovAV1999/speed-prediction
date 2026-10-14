@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from pathlib import Path
 
 import hydra
@@ -29,14 +30,24 @@ def main(cfg: DictConfig) -> None:
 
     manifest: dict[str, dict] = {}
     max_segments = data.comma2k19.max_segments
-    for route, seg, seg_dir in segments:
+    total = len(segments) if max_segments is None else min(len(segments), max_segments)
+    logger.info("event=preprocess_start segments=%d cache_dir=%s", total, cache_dir)
+    for i, (route, seg, seg_dir) in enumerate(segments, start=1):
         if max_segments is not None and len(manifest) >= max_segments:
             break
         seg_id = f"{route}/{seg}"
         fname = f"{route}__{seg}.npz"
+        logger.info("event=cache_segment_start index=%d/%d segment=%s", i, total, seg_id)
+        started = time.perf_counter()
         info = cache_segment(seg_dir, cache_dir / fname, image_size)
+        elapsed = time.perf_counter() - started
         manifest[seg_id] = {"file": fname, "n_frames": info["n_frames"], "group_id": route}
-        logger.info("event=cache_segment segment=%s frames=%d", seg_id, info["n_frames"])
+        logger.info(
+            "event=cache_segment segment=%s frames=%d elapsed_s=%.1f",
+            seg_id,
+            info["n_frames"],
+            elapsed,
+        )
 
     build_manifest(cache_dir, manifest)
     logger.info("event=preprocess_complete segments=%d cache_dir=%s", len(manifest), cache_dir)
