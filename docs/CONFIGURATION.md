@@ -166,7 +166,8 @@ training:
   learning_rate: 0.0001
   weight_decay: 0.00001
   optimizer: adamw
-  loss: mse                  # mse | l1
+  loss: mse                  # mse | l1 | mae | rmse | huber
+  huber_delta: 1.0           # mph; only used when loss=huber
   monitor: val/mae_mph
   early_stopping_patience: 5
   gradient_clip_val: null
