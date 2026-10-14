@@ -86,6 +86,8 @@ dataclasses (`src.config.Config`) — never raw dicts.
 
 Overrides use dot paths, e.g. `postprocessing.stationary.enter_threshold_mph=1.5`.
 
+See [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md) for the full configuration guide.
+
 ## Output contract
 
 Every run writes under `output/runs/<run_name>/` (plus `output/logs/` and
