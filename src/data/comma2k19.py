@@ -35,10 +35,15 @@ def _require_cv2():
 
 
 class CachedFrameSource:
-    """Memory-mapped frame source over an (uncompressed) cached .npz."""
+    """Memory-mapped frame source over an (uncompressed) cached .npz.
+
+    Picklable: only the path is serialized; the mmap'd handle is reopened in the
+    worker process (required for ``training.num_workers > 0``).
+    """
 
     def __init__(self, path: str | Path):
-        self._f = np.load(str(path), mmap_mode="r")
+        self._path = str(path)
+        self._f = np.load(self._path, mmap_mode="r")
         self._n = int(self._f["frames"].shape[0])
 
     def __len__(self) -> int:
@@ -46,6 +51,16 @@ class CachedFrameSource:
 
     def get(self, indices: Sequence[int]) -> np.ndarray:  # uint8 [k, H, W, C]
         return np.asarray(self._f["frames"][list(indices)])
+
+    def __getstate__(self) -> dict:
+        # The mmap'd npz holds a non-picklable file handle; serialize only the
+        # path and reopen it on the other side.
+        return {"_path": self._path, "_n": self._n}
+
+    def __setstate__(self, state: dict) -> None:
+        self._path = state["_path"]
+        self._n = state["_n"]
+        self._f = np.load(self._path, mmap_mode="r")
 
 
 class VideoFrameSource:

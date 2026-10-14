@@ -39,6 +39,17 @@ def test_cached_frame_source_len_and_get(cached_npz):
     assert got.dtype == np.uint8
 
 
+def test_cached_frame_source_picklable(cached_npz):
+    import pickle
+
+    src = CachedFrameSource(cached_npz)
+    restored = pickle.loads(pickle.dumps(src))
+    assert len(restored) == 5
+    got = restored.get([0, 2])
+    assert got.shape == (2, 8, 8, 3)
+    assert got.dtype == np.uint8
+
+
 def test_discover_segments_route_seg(tmp_path: Path):
     seg = tmp_path / "routeA" / "0"
     seg.mkdir(parents=True)
@@ -177,7 +188,17 @@ def test_build_datasets_dispatches_comma2k19(tmp_path: Path):
         manifest_segments[f"route{g}/0"] = {"file": fname, "n_frames": 20, "group_id": f"route{g}"}
     (cache_dir / "manifest.json").write_text(json.dumps({"segments": manifest_segments}))
 
-    cfg = validate_config(compose_config(["dataset=comma2k19", "preprocessing.image_size=[8,8]"]))
+    cfg = validate_config(
+        compose_config(
+            [
+                "dataset=comma2k19",
+                "preprocessing.image_size=[8,8]",
+                "data.sequence_length=5",
+                "data.frame_step=1",
+                "data.window_stride=1",
+            ]
+        )
+    )
     cfg.data.comma2k19.cache_dir = str(cache_dir)
     cfg.data.split_manifest = str(tmp_path / "splits" / "m.json")
 
