@@ -23,26 +23,37 @@ def _write_npy(path: Path, arr: np.ndarray) -> None:
     path.write_bytes(buf.getvalue())
 
 
+def _write_cache(cache_dir: Path, base: str, frames, speeds, timestamps) -> tuple[str, str]:
+    """Write a segment's frames (``.npy``) + meta (``.npz``); return the two filenames."""
+    np.save(cache_dir / f"{base}.frames.npy", np.asarray(frames))
+    np.savez(
+        cache_dir / f"{base}.meta.npz",
+        speeds_mph=np.asarray(speeds),
+        timestamps=np.asarray(timestamps),
+    )
+    return f"{base}.frames.npy", f"{base}.meta.npz"
+
+
 @pytest.fixture
-def cached_npz(tmp_path: Path) -> Path:
+def cached_frames(tmp_path: Path) -> Path:
     frames = np.arange(5 * 8 * 8 * 3, dtype=np.uint8).reshape(5, 8, 8, 3)
-    path = tmp_path / "seg.npz"
-    np.savez(path, frames=frames, speeds_mph=np.ones(5), timestamps=np.arange(5))
+    path = tmp_path / "seg.frames.npy"
+    np.save(path, frames)
     return path
 
 
-def test_cached_frame_source_len_and_get(cached_npz):
-    src = CachedFrameSource(cached_npz)
+def test_cached_frame_source_len_and_get(cached_frames):
+    src = CachedFrameSource(cached_frames)
     assert len(src) == 5
     got = src.get([0, 2])
     assert got.shape == (2, 8, 8, 3)
     assert got.dtype == np.uint8
 
 
-def test_cached_frame_source_picklable(cached_npz):
+def test_cached_frame_source_picklable(cached_frames):
     import pickle
 
-    src = CachedFrameSource(cached_npz)
+    src = CachedFrameSource(cached_frames)
     restored = pickle.loads(pickle.dumps(src))
     assert len(restored) == 5
     got = restored.get([0, 2])
@@ -85,11 +96,12 @@ def test_cache_segment_mph_conversion(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(
         c2k, "decode_segment_frames", lambda d, s: np.zeros((2, 4, 4, 3), dtype=np.uint8)
     )
-    info = c2k.cache_segment(seg, tmp_path / "out.npz", (4, 4))
+    info = c2k.cache_segment(seg, tmp_path / "out.frames.npy", tmp_path / "out.meta.npz", (4, 4))
     assert info["n_frames"] == 2
-    data = np.load(tmp_path / "out.npz")
-    assert np.allclose(data["speeds_mph"], [3.0 * c2k.MPH_PER_MPS, 4.0 * c2k.MPH_PER_MPS])
-    assert data["frames"].shape == (2, 4, 4, 3)
+    frames = np.load(tmp_path / "out.frames.npy")
+    meta = np.load(tmp_path / "out.meta.npz")
+    assert np.allclose(meta["speeds_mph"], [3.0 * c2k.MPH_PER_MPS, 4.0 * c2k.MPH_PER_MPS])
+    assert frames.shape == (2, 4, 4, 3)
 
 
 def test_cache_segment_frame_count_mismatch_raises(tmp_path: Path, monkeypatch):
@@ -102,23 +114,28 @@ def test_cache_segment_frame_count_mismatch_raises(tmp_path: Path, monkeypatch):
         c2k, "decode_segment_frames", lambda d, s: np.zeros((2, 4, 4, 3), dtype=np.uint8)
     )
     with pytest.raises(DataValidationError):
-        c2k.cache_segment(seg, tmp_path / "out.npz", (4, 4))
+        c2k.cache_segment(seg, tmp_path / "out.frames.npy", tmp_path / "out.meta.npz", (4, 4))
 
 
 def test_load_sequences_ids_and_max_segments(tmp_path: Path):
     cache_dir = tmp_path / "cache"
     cache_dir.mkdir()
     for i in range(3):
-        fname = f"route{i}__0.npz"
-        np.savez(
-            cache_dir / fname,
-            frames=np.zeros((5, 4, 4, 3), dtype=np.uint8),
-            speeds_mph=np.ones(5),
-            timestamps=np.arange(5),
+        _write_cache(
+            cache_dir,
+            f"route{i}__0",
+            np.zeros((5, 4, 4, 3), dtype=np.uint8),
+            np.ones(5),
+            np.arange(5),
         )
     manifest = {
         "segments": {
-            f"route{i}/0": {"file": f"route{i}__0.npz", "n_frames": 5, "group_id": f"route{i}"}
+            f"route{i}/0": {
+                "frames_file": f"route{i}__0.frames.npy",
+                "meta_file": f"route{i}__0.meta.npz",
+                "n_frames": 5,
+                "group_id": f"route{i}",
+            }
             for i in range(3)
         }
     }
@@ -154,10 +171,13 @@ def test_preprocess_flow_glue(tmp_path: Path, monkeypatch):
     cache_dir = tmp_path / "cache"
     manifest: dict = {}
     for route, sid, seg_dir in c2k.discover_segments(tmp_path / "raw"):
-        fname = f"{route}__{sid}.npz"
-        info = c2k.cache_segment(seg_dir, cache_dir / fname, (4, 4))
+        base = f"{route}__{sid}"
+        info = c2k.cache_segment(
+            seg_dir, cache_dir / f"{base}.frames.npy", cache_dir / f"{base}.meta.npz", (4, 4)
+        )
         manifest[f"{route}/{sid}"] = {
-            "file": fname,
+            "frames_file": f"{base}.frames.npy",
+            "meta_file": f"{base}.meta.npz",
             "n_frames": info["n_frames"],
             "group_id": route,
         }
@@ -178,14 +198,19 @@ def test_build_datasets_dispatches_comma2k19(tmp_path: Path):
     cache_dir.mkdir()
     manifest_segments = {}
     for g in range(6):
-        fname = f"route{g}__0.npz"
-        np.savez(
-            cache_dir / fname,
-            frames=np.zeros((20, 8, 8, 3), dtype=np.uint8),
-            speeds_mph=np.ones(20) * 20.0,
-            timestamps=np.arange(20) * 0.05,
+        _write_cache(
+            cache_dir,
+            f"route{g}__0",
+            np.zeros((20, 8, 8, 3), dtype=np.uint8),
+            np.ones(20) * 20.0,
+            np.arange(20) * 0.05,
         )
-        manifest_segments[f"route{g}/0"] = {"file": fname, "n_frames": 20, "group_id": f"route{g}"}
+        manifest_segments[f"route{g}/0"] = {
+            "frames_file": f"route{g}__0.frames.npy",
+            "meta_file": f"route{g}__0.meta.npz",
+            "n_frames": 20,
+            "group_id": f"route{g}",
+        }
     (cache_dir / "manifest.json").write_text(json.dumps({"segments": manifest_segments}))
 
     cfg = validate_config(

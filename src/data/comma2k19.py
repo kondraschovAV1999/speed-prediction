@@ -35,26 +35,29 @@ def _require_cv2():
 
 
 class CachedFrameSource:
-    """Memory-mapped frame source over an (uncompressed) cached .npz.
+    """Memory-mapped frame source over a cached ``.npy`` frames file.
 
-    Picklable: only the path is serialized; the mmap'd handle is reopened in the
-    worker process (required for ``training.num_workers > 0``).
+    Frames are stored as a plain ``.npy`` (not ``.npz``) because numpy cannot
+    memory-map arrays inside a zip archive — ``np.load(npz, mmap_mode="r")``
+    eagerly loads them. A ``.npy`` returns a true lazy memmap. Picklable: only
+    the path is serialized; the mmap is reopened in the worker (required for
+    ``training.num_workers > 0``).
     """
 
     def __init__(self, path: str | Path):
         self._path = str(path)
         self._f = np.load(self._path, mmap_mode="r")
-        self._n = int(self._f["frames"].shape[0])
+        self._n = int(self._f.shape[0])
 
     def __len__(self) -> int:
         return self._n
 
     def get(self, indices: Sequence[int]) -> np.ndarray:  # uint8 [k, H, W, C]
-        return np.asarray(self._f["frames"][list(indices)])
+        return np.asarray(self._f[list(indices)])
 
     def __getstate__(self) -> dict:
-        # The mmap'd npz holds a non-picklable file handle; serialize only the
-        # path and reopen it on the other side.
+        # The mmap holds a non-picklable file handle; serialize only the path
+        # and reopen it on the other side.
         return {"_path": self._path, "_n": self._n}
 
     def __setstate__(self, state: dict) -> None:
@@ -122,8 +125,14 @@ def decode_segment_frames(segment_dir: Path, image_size: tuple[int, int]) -> np.
     return np.stack(frames).astype(np.uint8)
 
 
-def cache_segment(segment_dir: Path, cache_path: Path, image_size: tuple[int, int]) -> dict:
-    """Decode + cache one segment to an *uncompressed* .npz; return ``{"n_frames": int}``."""
+def cache_segment(
+    segment_dir: Path, frames_path: Path, meta_path: Path, image_size: tuple[int, int]
+) -> dict:
+    """Decode + cache one segment; return ``{"n_frames": int}``.
+
+    Frames are written as a plain ``.npy`` (memory-mappable); speeds/timestamps
+    go into a small ``.npz``.
+    """
     global_pose = segment_dir / "global_pose"
     # comma2k19 global_pose arrays are npy-format but stored WITHOUT a .npy extension.
     frame_times = np.load(global_pose / "frame_times")
@@ -136,9 +145,9 @@ def cache_segment(segment_dir: Path, cache_path: Path, image_size: tuple[int, in
             f"{segment_dir}: decoded {frames.shape[0]} frames but "
             f"frame_times has {frame_times.shape[0]}"
         )
-    cache_path.parent.mkdir(parents=True, exist_ok=True)
-    # np.savez (NOT savez_compressed) so the cache is memory-mappable.
-    np.savez(cache_path, frames=frames, speeds_mph=speeds_mph, timestamps=frame_times)
+    frames_path.parent.mkdir(parents=True, exist_ok=True)
+    np.save(frames_path, frames)
+    np.savez(meta_path, speeds_mph=speeds_mph, timestamps=frame_times)
     return {"n_frames": int(frame_times.shape[0])}
 
 
@@ -165,15 +174,14 @@ def load_comma2k19_sequences(cfg: DataCfg, seed: int) -> list[SpeedSequence]:
 
     sequences: list[SpeedSequence] = []
     for seg_id, info in entries:
-        npz_path = cache_dir / info["file"]
-        data = np.load(npz_path, mmap_mode="r")
+        meta = np.load(cache_dir / info["meta_file"])
         sequences.append(
             SpeedSequence(
                 sequence_id=seg_id,
                 group_id=info["group_id"],
-                frames=CachedFrameSource(npz_path),
-                speeds_mph=np.asarray(data["speeds_mph"], dtype=float),
-                timestamps=np.asarray(data["timestamps"], dtype=float),
+                frames=CachedFrameSource(cache_dir / info["frames_file"]),
+                speeds_mph=np.asarray(meta["speeds_mph"], dtype=float),
+                timestamps=np.asarray(meta["timestamps"], dtype=float),
             )
         )
     return sequences

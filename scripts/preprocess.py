@@ -36,12 +36,19 @@ def main(cfg: DictConfig) -> None:
         if max_segments is not None and len(manifest) >= max_segments:
             break
         seg_id = f"{route}/{seg}"
-        fname = f"{route}__{seg}.npz"
+        base = f"{route}__{seg}"
+        frames_fname = f"{base}.frames.npy"
+        meta_fname = f"{base}.meta.npz"
         logger.info("event=cache_segment_start index=%d/%d segment=%s", i, total, seg_id)
         started = time.perf_counter()
-        info = cache_segment(seg_dir, cache_dir / fname, image_size)
+        info = cache_segment(seg_dir, cache_dir / frames_fname, cache_dir / meta_fname, image_size)
         elapsed = time.perf_counter() - started
-        manifest[seg_id] = {"file": fname, "n_frames": info["n_frames"], "group_id": route}
+        manifest[seg_id] = {
+            "frames_file": frames_fname,
+            "meta_file": meta_fname,
+            "n_frames": info["n_frames"],
+            "group_id": route,
+        }
         logger.info(
             "event=cache_segment segment=%s frames=%d elapsed_s=%.1f",
             seg_id,
