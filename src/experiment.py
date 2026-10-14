@@ -34,6 +34,7 @@ from src.models.training import (
     SpeedLightningModule,
     build_trainer,
     load_model_from_checkpoint,
+    save_model_export,
 )
 from src.tracking.tracker import create_tracker
 
@@ -86,10 +87,13 @@ def run_experiment(cfg: DictConfig) -> RunPaths:
 
         # 4. Evaluate each requested split.
         loaded_model = load_model_from_checkpoint(best_checkpoint, cfg.model)
+        save_model_export(loaded_model, paths.run_dir / "model.pt", cfg.model)
         results: dict = {}
         prediction_frames: list[pd.DataFrame] = []
         for split_name in cfg.evaluation.splits_to_evaluate:
-            raw_df = collect_raw_predictions(loaded_model, loaders[split_name], "cpu", split_name)
+            raw_df = collect_raw_predictions(
+                loaded_model, loaders[split_name], cfg.evaluation.device, split_name
+            )
             final_df = postprocess_dataframe(raw_df, cfg.postprocessing)
             results[split_name] = evaluate_predictions(final_df, cfg.evaluation, split_name)
             prediction_frames.append(final_df)
@@ -199,7 +203,7 @@ def evaluate_run(paths: RunPaths, cfg: Config) -> dict:
     model = load_model_from_checkpoint(best, cfg.model)
     results: dict = {}
     for split_name in cfg.evaluation.splits_to_evaluate:
-        raw = collect_raw_predictions(model, loaders[split_name], "cpu", split_name)
+        raw = collect_raw_predictions(model, loaders[split_name], cfg.evaluation.device, split_name)
         final = postprocess_dataframe(raw, cfg.postprocessing)
         results[split_name] = evaluate_predictions(final, cfg.evaluation, split_name)
     return results

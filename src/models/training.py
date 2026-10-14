@@ -104,3 +104,26 @@ def load_model_from_checkpoint(path: Path | str, cfg: ModelCfg) -> BaseSpeedMode
     model.load_state_dict(stripped)
     model.eval()
     return model
+
+
+def save_model_export(model: BaseSpeedModel, path: Path | str, cfg: ModelCfg) -> None:
+    """Save a standalone, self-describing model export (no Lightning wrapper)."""
+    payload = {
+        "state_dict": model.state_dict(),
+        "model_name": cfg.name,
+        "encoder": cfg.encoder,
+        "temporal": cfg.temporal,
+    }
+    torch.save(payload, str(path))
+
+
+def load_model_export(path: Path | str) -> BaseSpeedModel:
+    """Load a standalone model export produced by :func:`save_model_export`."""
+    payload = torch.load(str(path), map_location="cpu", weights_only=False)
+    cfg = ModelCfg(
+        name=payload["model_name"], encoder=payload["encoder"], temporal=payload["temporal"]
+    )
+    model = build_model(cfg)
+    model.load_state_dict(payload["state_dict"])
+    model.eval()
+    return model

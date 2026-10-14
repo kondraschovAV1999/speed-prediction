@@ -82,3 +82,16 @@ def test_load_model_from_checkpoint_roundtrip(tmp_path: Path):
     x = torch.randn(2, 5, 3, 32, 32)
     with torch.no_grad():
         assert torch.allclose(model(x), loaded(x))
+
+
+def test_model_export_roundtrip(tmp_path: Path):
+    from src.models.training import load_model_export, save_model_export
+
+    model = build_model(make_model_cfg())
+    model.eval()
+    path = tmp_path / "model.pt"
+    save_model_export(model, path, make_model_cfg())
+    loaded = load_model_export(path)
+    x = torch.randn(2, 5, 3, 32, 32)
+    with torch.no_grad():
+        assert torch.allclose(model(x), loaded(x))
