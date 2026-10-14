@@ -91,12 +91,14 @@ def run_experiment(cfg: DictConfig) -> RunPaths:
         results: dict = {}
         prediction_frames: list[pd.DataFrame] = []
         for split_name in cfg.evaluation.splits_to_evaluate:
+            logger.info("event=evaluate_split_start split=%s", split_name)
             raw_df = collect_raw_predictions(
                 loaded_model, loaders[split_name], cfg.evaluation.device, split_name
             )
             final_df = postprocess_dataframe(raw_df, cfg.postprocessing)
             results[split_name] = evaluate_predictions(final_df, cfg.evaluation, split_name)
             prediction_frames.append(final_df)
+            logger.info("event=evaluate_split_complete split=%s n=%d", split_name, len(final_df))
 
         predictions_df = pd.concat(prediction_frames, ignore_index=True).sort_values(
             ["split", "sequence_id", "frame_index"]
@@ -106,6 +108,7 @@ def run_experiment(cfg: DictConfig) -> RunPaths:
         latency: dict | None = None
         latency_samples: np.ndarray = np.array([], dtype=float)
         if cfg.benchmark.enabled:
+            logger.info("event=benchmark_start iters=%d", cfg.benchmark.num_iters)
             example = next(iter(loaders["val"]))["frames"][:1]
             model_samples, model_summary = benchmark_model(
                 loaded_model,
@@ -141,6 +144,7 @@ def run_experiment(cfg: DictConfig) -> RunPaths:
             pd.DataFrame({"model_only_ms": model_samples, "end_to_end_ms": e2e_samples}).to_csv(
                 latency_csv, index=False
             )
+            logger.info("event=benchmark_complete")
 
         write_metrics_json(
             paths,
