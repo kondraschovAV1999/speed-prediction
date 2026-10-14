@@ -18,6 +18,11 @@ from src.models.architectures import BaseSpeedModel, build_model
 from src.tracking.tracker import ExperimentTracker
 
 
+def _rmse_loss(pred: Tensor, target: Tensor) -> Tensor:
+    """RMSE (mph): sqrt(MSE). Same optimum as MSE; epsilon avoids inf gradient at 0."""
+    return torch.sqrt(F.mse_loss(pred, target) + 1e-8)
+
+
 class SpeedLightningModule(L.LightningModule):
     """Wraps a :class:`BaseSpeedModel` for training/eval with Lightning."""
 
@@ -25,7 +30,11 @@ class SpeedLightningModule(L.LightningModule):
         super().__init__()
         self.model = model
         self.cfg = training_cfg
-        self.loss_fn = {"mse": F.mse_loss, "l1": F.l1_loss}[training_cfg.loss]
+        self.loss_fn = {
+            "mse": F.mse_loss,
+            "l1": F.l1_loss,
+            "rmse": _rmse_loss,
+        }[training_cfg.loss]
 
     def forward(self, frames: Tensor) -> Tensor:
         return self.model(frames)
@@ -42,6 +51,8 @@ class SpeedLightningModule(L.LightningModule):
         self.log("val/loss", loss, on_epoch=True)
         mae = torch.abs(pred - batch["target_mph"]).mean()
         self.log("val/mae_mph", mae, on_epoch=True)
+        rmse = torch.sqrt(torch.mean((pred - batch["target_mph"]) ** 2) + 1e-8)
+        self.log("val/rmse_mph", rmse, on_epoch=True)
         return loss
 
     def predict_step(self, batch: dict, batch_idx: int) -> dict:

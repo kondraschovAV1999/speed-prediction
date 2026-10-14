@@ -257,7 +257,7 @@ def _validate_semantics(obj: Config) -> None:
         raise ConfigError("stationary persistence frames must be >= 1")
     if obj.postprocessing.smoothing.method not in ("none", "ema", "median"):
         raise ConfigError(f"Unknown smoothing method: {obj.postprocessing.smoothing.method!r}")
-    if obj.training.loss not in ("mse", "l1"):
+    if obj.training.loss not in ("mse", "l1", "rmse"):
         raise ConfigError(f"Unknown loss: {obj.training.loss!r}")
     if obj.data.on_duplicate_timestamp not in ("raise", "drop_later"):
         raise ConfigError(f"Unknown on_duplicate_timestamp: {obj.data.on_duplicate_timestamp!r}")

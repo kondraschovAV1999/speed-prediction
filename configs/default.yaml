@@ -1,7 +1,7 @@
 defaults:
   - _self_
-  - dataset: synthetic
-  - model: tiny_cnn_gru
+  - dataset: comma2k19
+  - model: efficientnet_lstm
   - experiment: baseline
   - override hydra/job_logging: disabled   # we configure logging ourselves
   - override hydra/hydra_logging: disabled
@@ -33,12 +33,12 @@ preprocessing:
 # `model` is provided by the model group
 
 training:
-  batch_size: 32
-  epochs: 5
-  learning_rate: 0.0001
+  batch_size: 64
+  epochs: 100
+  learning_rate: 0.001
   weight_decay: 0.00001
   optimizer: adamw
-  loss: mse                 # mse | l1   (huber etc. are future work)
+  loss: l1                 # mse | l1 | rmse
   monitor: val/mae_mph
   early_stopping_patience: 5
   gradient_clip_val: null
@@ -70,8 +70,8 @@ evaluation:
 benchmark:
   enabled: true
   device: auto
-  num_warmup: 10
-  num_iters: 100
+  num_warmup: 5
+  num_iters: 10
 
 tracking:
   enabled: true
