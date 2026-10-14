@@ -31,6 +31,14 @@ def setup_logging(log_file: Path | None, level: str = "INFO") -> None:
     root.setLevel(level.upper())
     formatter = logging.Formatter(_LOG_FORMAT)
 
+    # Hydra (during @hydra.main init) calls logging.config.dictConfig, which
+    # disables pre-existing loggers (disable_existing_loggers default). That
+    # silently drops messages from any module-level `get_logger(__name__)` that
+    # was created at import time, before main() ran. Re-enable them here.
+    for lg in logging.Logger.manager.loggerDict.values():
+        if isinstance(lg, logging.Logger) and lg.disabled:
+            lg.disabled = False
+
     console = logging.StreamHandler()
     console.setFormatter(formatter)
     root.addHandler(console)
