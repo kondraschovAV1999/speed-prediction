@@ -67,11 +67,12 @@ windows [B,T,C,H,W]  →  EncoderRecurrent (encoder → temporal → head)  → 
 |---|---|---|
 | `src/data/comma2k19.py` | **new** | `decode_segment_frames`, `cache_segment`, `build_manifest`, `load_comma2k19_sequences`, `CachedFrameSource`, `VideoFrameSource` |
 | `src/data/dataset.py` | edit | `build_datasets` dispatch on `cfg.data.source`; per-split stride |
-| `src/core/config.py` | edit | add `Comma2k19Cfg` + `DataCfg.comma2k19` field |
+| `src/core/config.py` | edit | add `Comma2k19Cfg`, `DataCfg.comma2k19`, `EvaluationCfg.device` |
 | `src/models/architectures.py` | edit | rename `TinyCNNGRU`→`EncoderRecurrent`; add `LSTMTemporal`, `ConvLSTM`(+cell), `ResNet18Encoder`; generalized construction + dual-path forward; registry entries |
 | `src/models/training.py` | edit | add `save_model_export` / `load_model_export` |
-| `src/experiment.py` | edit | call `save_model_export` after loading best checkpoint |
+| `src/experiment.py` | edit | call `save_model_export`; use `evaluation.device` for prediction |
 | `configs/dataset/comma2k19.yaml` | **new** | comma2k19 dataset group |
+| `configs/default.yaml` | edit | add `evaluation.device: auto` |
 | `configs/model/{cnn_lstm,resnet_lstm,resnet_convlstm}.yaml` | **new** | model configs |
 | `scripts/preprocess.py`, `scripts/inspect_data.py` | **new** | decode→cache CLI; data sanity check |
 | `tests/unit/test_comma2k19.py` | **new** | offline fixture tests |
@@ -176,6 +177,15 @@ comma2k19:
 
 **Deviation from the M2-a doc:** comma2k19-specific keys are nested under a
 `comma2k19:` block (matching the `synthetic:` structure), not flat under `data`.
+
+### 6.3 Evaluation/inference device
+
+`EvaluationCfg` gains `device: str = "auto"`; `configs/default.yaml` adds
+`evaluation.device: auto`. `run_experiment` and `evaluate_run` pass
+`cfg.evaluation.device` to `collect_raw_predictions` (replacing the hardcoded
+`"cpu"`). `resolve_device("auto")` already maps to CUDA when available, else CPU,
+so training/eval/benchmark/streaming all run on GPU when present — matching the
+user's CUDA-enabled environment. Tests run on CPU (`auto` → CPU).
 
 ## 7. Sliding-window data layer
 
@@ -453,14 +463,14 @@ always use `pretrained: false`.
 | D-B-6 | Per-split stride: train uses `data.window_stride` (default 5), val/test locked to 1. |
 | D-B-7 | `weights_path` for offline ResNet reuse; `model.pt` standalone export per run. |
 | D-B-8 | `EncoderRecurrent` generalizes the old `TinyCNNGRU`; `tiny_cnn_gru` name stays registered. |
+| D-B-9 | Evaluation/inference device via `evaluation.device` (default `auto` → GPU when available); no hardcoded CPU. |
 
 ## 14. Out of scope / notes
 
 - **Deferred:** per-frame feature caching (M2-e), ConvLSTM stacking, CNN+ConvLSTM,
   GRU/Transformer swaps, stationary study, runtime targets.
-- **Known existing limitation (not changed):** `run_experiment` evaluates on CPU
-  (`collect_raw_predictions(..., "cpu", ...)`); fine for M1, may want device
-  config later for real-data runs — flagged, out of scope here.
+- **Device:** evaluation/inference uses `evaluation.device` (default `auto` →
+  CUDA when available); see §6.3. No CPU hardcoding remains.
 - **ConvLSTM map size:** at 128² the spatial map is 4×4; if ConvLSTM underperforms,
   bump `cache_image_size` to 224 (7×7 maps) with a config override, no code change.
 - **Label caveat (from M2-a):** `frame_velocities` comes from comma.ai's
