@@ -20,6 +20,19 @@ def make_model_cfg() -> ModelCfg:
     )
 
 
+def test_cnn_lstm_shape():
+    cfg = ModelCfg(
+        name="cnn_lstm",
+        encoder={"name": "tiny_cnn", "pretrained": False, "feature_dim": 64},
+        temporal={"name": "lstm", "hidden_size": 32, "num_layers": 1},
+        checkpoint=None,
+    )
+    model = build_model(cfg)
+    out = model(torch.randn(2, 5, 3, 32, 32))
+    assert out.shape == (2,)
+    assert torch.isfinite(out).all()
+
+
 def test_output_shape_b1():
     model = build_model(make_model_cfg())
     out = model(torch.randn(1, 5, 3, 32, 32))

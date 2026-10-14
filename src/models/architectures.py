@@ -25,7 +25,7 @@ class TinyCNNEncoder(nn.Module):
     to recover motion cues (a 1x1 global pool would be translation-invariant).
     """
 
-    def __init__(self, feature_dim: int = 64):
+    def __init__(self, feature_dim: int = 64, **kwargs):
         super().__init__()
         self.conv1 = nn.Conv2d(3, 16, kernel_size=3, padding=1)
         self.conv2 = nn.Conv2d(16, 32, kernel_size=3, padding=1, stride=2)
@@ -59,14 +59,32 @@ class GRUTemporal(nn.Module):
         return out[:, -1, :]  # [B, hidden_size]
 
 
-class TinyCNNGRU(BaseSpeedModel):
-    """Skeleton model: per-frame CNN encoder + GRU temporal + linear head."""
+class LSTMTemporal(nn.Module):
+    """LSTM over the per-frame feature sequence; returns the last timestep."""
+
+    def __init__(self, input_dim: int, hidden_size: int = 32, num_layers: int = 1):
+        super().__init__()
+        self.lstm = nn.LSTM(
+            input_size=input_dim, hidden_size=hidden_size, num_layers=num_layers, batch_first=True
+        )
+
+    def forward(self, x: Tensor) -> Tensor:  # x: [B, T, input_dim]
+        out, _ = self.lstm(x)
+        return out[:, -1, :]  # [B, hidden_size]
+
+
+class EncoderRecurrent(BaseSpeedModel):
+    """Generic encoder -> per-frame features -> recurrent temporal -> head.
+
+    The encoder may return a per-frame vector ``[B*T, feature_dim]`` (fed to an
+    LSTM/GRU) or a per-frame spatial map ``[B*T, C, H, W]`` (fed to a ConvLSTM).
+    ``forward`` dispatches on the number of dimensions of the encoder output.
+    """
 
     def __init__(self, encoder: dict, temporal: dict):
         super().__init__()
         feature_dim = int(encoder.get("feature_dim", 64))
         hidden_size = int(temporal.get("hidden_size", 32))
-        num_layers = int(temporal.get("num_layers", 1))
 
         encoder_name = encoder.get("name", "tiny_cnn")
         if encoder_name not in ENCODER_REGISTRY:
@@ -75,24 +93,33 @@ class TinyCNNGRU(BaseSpeedModel):
         if temporal_name not in TEMPORAL_REGISTRY:
             raise ConfigError(f"Unknown temporal module {temporal_name!r}")
 
-        self.encoder = ENCODER_REGISTRY[encoder_name](feature_dim=feature_dim)
-        self.temporal = TEMPORAL_REGISTRY[temporal_name](
-            input_dim=feature_dim, hidden_size=hidden_size, num_layers=num_layers
+        self.encoder = ENCODER_REGISTRY[encoder_name](
+            **{k: v for k, v in encoder.items() if k != "name"}
         )
+        tmp_kwargs = {k: v for k, v in temporal.items() if k != "name"}
+        tmp_kwargs["input_dim"] = feature_dim
+        self.temporal = TEMPORAL_REGISTRY[temporal_name](**tmp_kwargs)
         self.head = nn.Linear(hidden_size, 1)
 
     def forward(self, frames: Tensor) -> Tensor:  # frames: [B, T, C, H, W]
         b, t, c, h, w = frames.shape
-        feats = self.encoder(frames.reshape(b * t, c, h, w))  # [B*T, feature_dim]
-        feats = feats.reshape(b, t, -1)
-        last = self.temporal(feats)  # [B, hidden_size]
+        feats = self.encoder(frames.reshape(b * t, c, h, w))
+        if feats.ndim == 2:  # vector path (LSTM/GRU)
+            last = self.temporal(feats.reshape(b, t, -1))  # [B, hidden]
+        else:  # spatial path (ConvLSTM)
+            _, ch, fh, fw = feats.shape
+            last = self.temporal(feats.reshape(b, t, ch, fh, fw))  # [B, hidden, fh, fw]
+            last = last.mean(dim=(2, 3))  # [B, hidden]
         return self.head(last).squeeze(-1)  # [B]
 
 
 ENCODER_REGISTRY: dict[str, type[nn.Module]] = {"tiny_cnn": TinyCNNEncoder}
-TEMPORAL_REGISTRY: dict[str, type[nn.Module]] = {"gru": GRUTemporal}
+TEMPORAL_REGISTRY: dict[str, type[nn.Module]] = {"gru": GRUTemporal, "lstm": LSTMTemporal}
 
-MODEL_REGISTRY: dict[str, type[BaseSpeedModel]] = {"tiny_cnn_gru": TinyCNNGRU}
+MODEL_REGISTRY: dict[str, type[BaseSpeedModel]] = {
+    "tiny_cnn_gru": EncoderRecurrent,
+    "cnn_lstm": EncoderRecurrent,
+}
 
 
 def build_model(cfg: ModelCfg) -> BaseSpeedModel:
