@@ -54,7 +54,7 @@ def write_predictions_csv(paths: RunPaths, df: pd.DataFrame) -> None:
     present = [c for c in _CANONICAL_COLUMNS if c in df.columns]
     out = df[present].copy()
     if "final_speed_mph" in out.columns:
-        values = out["final_speed_mph"].to_numpy(dtype=float)
+        values = out["final_speed_mph"].to_numpy(dtype=float).copy()
         values[np.signbit(values) & (values == 0.0)] = 0.0
         out["final_speed_mph"] = values
     paths.predictions_path.parent.mkdir(parents=True, exist_ok=True)
