@@ -1,0 +1,4 @@
+name: resnet_lstm
+encoder: {name: resnet18, pretrained: true, feature_dim: 512, frozen: true, spatial: false, weights_path: null}
+temporal: {name: lstm, hidden_size: 64, num_layers: 1}
+checkpoint: null

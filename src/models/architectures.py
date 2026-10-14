@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torchvision
 from torch import Tensor
+from torchvision.models import ResNet18_Weights
 
 from src.core.config import ModelCfg
 from src.core.schemas import ConfigError
@@ -39,6 +42,49 @@ class TinyCNNEncoder(nn.Module):
         x = F.relu(self.conv3(x))
         x = self.pool(x)
         return self.fc(x.flatten(1))  # [B, feature_dim]
+
+
+class ResNet18Encoder(nn.Module):
+    """Frozen (or trainable) ResNet18 backbone with the classification head removed.
+
+    ``spatial=False`` -> global-average pool to a vector ``[B, feature_dim]``.
+    ``spatial=True``  -> conv stem only, 1x1-projected to ``feature_dim`` channels
+                         ``[B, feature_dim, H/32, W/32]``.
+    """
+
+    def __init__(
+        self,
+        feature_dim: int = 512,
+        pretrained: bool = True,
+        frozen: bool = True,
+        spatial: bool = False,
+        weights_path: str | None = None,
+    ):
+        super().__init__()
+        weights = (
+            None
+            if weights_path is not None
+            else (ResNet18_Weights.IMAGENET1K_V1 if pretrained else None)
+        )
+        backbone = torchvision.models.resnet18(weights=weights)
+        if weights_path is not None:
+            backbone.load_state_dict(torch.load(weights_path, map_location="cpu"))
+
+        if spatial:
+            self.backbone = nn.Sequential(*list(backbone.children())[:-2])  # -> [B,512,H/32,W/32]
+            self.proj = nn.Conv2d(512, feature_dim, 1)
+        else:
+            backbone.fc = nn.Identity()  # avgpool + flatten -> [B, 512]
+            self.backbone = backbone
+            self.proj = nn.Linear(512, feature_dim) if feature_dim != 512 else nn.Identity()
+
+        if frozen:
+            for p in self.backbone.parameters():
+                p.requires_grad_(False)
+            self.backbone.eval()  # BN running stats; avoids B=1 train-mode BN errors
+
+    def forward(self, x: Tensor) -> Tensor:  # x: [B, C, H, W]
+        return self.proj(self.backbone(x))
 
 
 class GRUTemporal(nn.Module):
@@ -113,12 +159,16 @@ class EncoderRecurrent(BaseSpeedModel):
         return self.head(last).squeeze(-1)  # [B]
 
 
-ENCODER_REGISTRY: dict[str, type[nn.Module]] = {"tiny_cnn": TinyCNNEncoder}
+ENCODER_REGISTRY: dict[str, type[nn.Module]] = {
+    "tiny_cnn": TinyCNNEncoder,
+    "resnet18": ResNet18Encoder,
+}
 TEMPORAL_REGISTRY: dict[str, type[nn.Module]] = {"gru": GRUTemporal, "lstm": LSTMTemporal}
 
 MODEL_REGISTRY: dict[str, type[BaseSpeedModel]] = {
     "tiny_cnn_gru": EncoderRecurrent,
     "cnn_lstm": EncoderRecurrent,
+    "resnet_lstm": EncoderRecurrent,
 }
 
 

@@ -54,9 +54,34 @@ def test_unknown_model_name_raises():
 
 def test_unknown_encoder_raises():
     cfg = make_model_cfg()
-    cfg.encoder = {"name": "resnet", "pretrained": True, "feature_dim": 64}
+    cfg.encoder = {"name": "definitely_not_an_encoder", "pretrained": True, "feature_dim": 64}
     with pytest.raises(ConfigError):
         build_model(cfg)
+
+
+def test_resnet_lstm_frozen_shape_and_trainable():
+    cfg = ModelCfg(
+        name="resnet_lstm",
+        encoder={
+            "name": "resnet18",
+            "pretrained": False,
+            "feature_dim": 512,
+            "frozen": True,
+            "spatial": False,
+        },
+        temporal={"name": "lstm", "hidden_size": 64, "num_layers": 1},
+        checkpoint=None,
+    )
+    model = build_model(cfg)
+    out = model(torch.randn(2, 3, 3, 128, 128))
+    assert out.shape == (2,)
+    assert torch.isfinite(out).all()
+    # frozen backbone: zero trainable params inside the backbone
+    backbone_trainable = [p for p in model.encoder.backbone.parameters() if p.requires_grad]
+    assert len(backbone_trainable) == 0
+    # temporal + head still trainable, but fewer trainable than total params
+    assert count_parameters(model) > 0
+    assert count_parameters(model) < sum(p.numel() for p in model.parameters())
 
 
 def test_param_count_positive():
