@@ -5,9 +5,8 @@ from __future__ import annotations
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torchvision
+import torchvision.models as tvm
 from torch import Tensor
-from torchvision.models import ResNet18_Weights
 
 from src.core.config import ModelCfg
 from src.core.schemas import ConfigError
@@ -44,8 +43,51 @@ class TinyCNNEncoder(nn.Module):
         return self.fc(x.flatten(1))  # [B, feature_dim]
 
 
-class ResNet18Encoder(nn.Module):
-    """Frozen (or trainable) ResNet18 backbone with the classification head removed.
+# Pre-trained torchvision backbones usable as (frozen) feature extractors.
+# Keys: build = constructor, weights = Weights enum, dim = native feature dim,
+# head = classification-head attribute, features = spatial-stem attr (None = strip
+# avgpool+fc ResNet-style).
+_BACKBONES: dict[str, dict] = {
+    "resnet18": {
+        "build": tvm.resnet18,
+        "weights": tvm.ResNet18_Weights,
+        "dim": 512,
+        "head": "fc",
+        "features": None,
+    },
+    "resnet50": {
+        "build": tvm.resnet50,
+        "weights": tvm.ResNet50_Weights,
+        "dim": 2048,
+        "head": "fc",
+        "features": None,
+    },
+    "mobilenet_v3_small": {
+        "build": tvm.mobilenet_v3_small,
+        "weights": tvm.MobileNet_V3_Small_Weights,
+        "dim": 576,
+        "head": "classifier",
+        "features": "features",
+    },
+    "mobilenet_v3_large": {
+        "build": tvm.mobilenet_v3_large,
+        "weights": tvm.MobileNet_V3_Large_Weights,
+        "dim": 960,
+        "head": "classifier",
+        "features": "features",
+    },
+    "efficientnet_b0": {
+        "build": tvm.efficientnet_b0,
+        "weights": tvm.EfficientNet_B0_Weights,
+        "dim": 1280,
+        "head": "classifier",
+        "features": "features",
+    },
+}
+
+
+class BackboneEncoder(nn.Module):
+    """Frozen (or trainable) pre-trained backbone with the classification head removed.
 
     ``spatial=False`` -> global-average pool to a vector ``[B, feature_dim]``.
     ``spatial=True``  -> conv stem only, 1x1-projected to ``feature_dim`` channels
@@ -59,24 +101,38 @@ class ResNet18Encoder(nn.Module):
         frozen: bool = True,
         spatial: bool = False,
         weights_path: str | None = None,
+        backbone: str = "resnet18",
     ):
         super().__init__()
+        if backbone not in _BACKBONES:
+            raise ConfigError(f"Unknown backbone {backbone!r}. Valid: {sorted(_BACKBONES)}")
+        spec = _BACKBONES[backbone]
         weights = (
             None
             if weights_path is not None
-            else (ResNet18_Weights.IMAGENET1K_V1 if pretrained else None)
+            else (spec["weights"].IMAGENET1K_V1 if pretrained else None)
         )
-        backbone = torchvision.models.resnet18(weights=weights)
+        model = spec["build"](weights=weights)
         if weights_path is not None:
-            backbone.load_state_dict(torch.load(weights_path, map_location="cpu"))
+            model.load_state_dict(torch.load(weights_path, map_location="cpu"))
 
+        native_dim = int(spec["dim"])
         if spatial:
-            self.backbone = nn.Sequential(*list(backbone.children())[:-2])  # -> [B,512,H/32,W/32]
-            self.proj = nn.Conv2d(512, feature_dim, 1)
+            if spec["features"] is None:  # ResNet-style: strip avgpool + fc
+                self.backbone = nn.Sequential(*list(model.children())[:-2])
+            else:
+                self.backbone = model.features
+            self.proj = (
+                nn.Conv2d(native_dim, feature_dim, 1)
+                if feature_dim != native_dim
+                else nn.Identity()
+            )
         else:
-            backbone.fc = nn.Identity()  # avgpool + flatten -> [B, 512]
-            self.backbone = backbone
-            self.proj = nn.Linear(512, feature_dim) if feature_dim != 512 else nn.Identity()
+            setattr(model, spec["head"], nn.Identity())  # remove classification head
+            self.backbone = model
+            self.proj = (
+                nn.Linear(native_dim, feature_dim) if feature_dim != native_dim else nn.Identity()
+            )
 
         if frozen:
             for p in self.backbone.parameters():
@@ -196,7 +252,8 @@ class EncoderRecurrent(BaseSpeedModel):
 
 ENCODER_REGISTRY: dict[str, type[nn.Module]] = {
     "tiny_cnn": TinyCNNEncoder,
-    "resnet18": ResNet18Encoder,
+    "resnet18": BackboneEncoder,  # legacy alias (backbone defaults to "resnet18")
+    "backbone": BackboneEncoder,
 }
 TEMPORAL_REGISTRY: dict[str, type[nn.Module]] = {
     "gru": GRUTemporal,
@@ -209,6 +266,8 @@ MODEL_REGISTRY: dict[str, type[BaseSpeedModel]] = {
     "cnn_lstm": EncoderRecurrent,
     "resnet_lstm": EncoderRecurrent,
     "resnet_convlstm": EncoderRecurrent,
+    "mobilenet_lstm": EncoderRecurrent,
+    "efficientnet_lstm": EncoderRecurrent,
 }
 
 

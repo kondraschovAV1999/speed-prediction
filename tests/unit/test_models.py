@@ -136,3 +136,63 @@ def test_resnet_convlstm_spatial_shape_and_frozen():
     assert feats.ndim == 4
     assert feats.shape[1] == 32
     assert len([p for p in model.encoder.backbone.parameters() if p.requires_grad]) == 0
+
+
+def test_mobilenet_lstm_shape_and_frozen():
+    cfg = ModelCfg(
+        name="mobilenet_lstm",
+        encoder={
+            "name": "backbone",
+            "backbone": "mobilenet_v3_small",
+            "pretrained": False,
+            "feature_dim": 576,
+            "frozen": True,
+            "spatial": False,
+        },
+        temporal={"name": "lstm", "hidden_size": 64, "num_layers": 1},
+        checkpoint=None,
+    )
+    model = build_model(cfg)
+    out = model(torch.randn(2, 3, 3, 128, 128))
+    assert out.shape == (2,)
+    assert torch.isfinite(out).all()
+    assert len([p for p in model.encoder.backbone.parameters() if p.requires_grad]) == 0
+
+
+def test_efficientnet_lstm_shape_and_frozen():
+    cfg = ModelCfg(
+        name="efficientnet_lstm",
+        encoder={
+            "name": "backbone",
+            "backbone": "efficientnet_b0",
+            "pretrained": False,
+            "feature_dim": 1280,
+            "frozen": True,
+            "spatial": False,
+        },
+        temporal={"name": "lstm", "hidden_size": 64, "num_layers": 1},
+        checkpoint=None,
+    )
+    model = build_model(cfg)
+    out = model(torch.randn(2, 3, 3, 128, 128))
+    assert out.shape == (2,)
+    assert torch.isfinite(out).all()
+    assert len([p for p in model.encoder.backbone.parameters() if p.requires_grad]) == 0
+
+
+def test_unknown_backbone_raises():
+    cfg = ModelCfg(
+        name="mobilenet_lstm",
+        encoder={
+            "name": "backbone",
+            "backbone": "not_a_backbone",
+            "pretrained": False,
+            "feature_dim": 128,
+            "frozen": True,
+            "spatial": False,
+        },
+        temporal={"name": "lstm", "hidden_size": 64, "num_layers": 1},
+        checkpoint=None,
+    )
+    with pytest.raises(ConfigError):
+        build_model(cfg)
