@@ -50,6 +50,15 @@ class SyntheticCfg:
 
 
 @dataclass
+class Comma2k19Cfg:
+    speed_source: str = "global_pose"
+    use_cache: bool = True
+    cache_dir: str = "data/interim/comma2k19"
+    cache_image_size: list[int] = field(default_factory=lambda: [128, 128])
+    max_segments: int | None = None  # null = all; int = limit for smoke/pilot
+
+
+@dataclass
 class DataCfg:
     source: str = "synthetic"
     root: str = "data/processed"
@@ -66,6 +75,7 @@ class DataCfg:
     allow_negative_speed: bool = False
     max_speed_mph: float = 200
     synthetic: SyntheticCfg = field(default_factory=SyntheticCfg)
+    comma2k19: Comma2k19Cfg = field(default_factory=Comma2k19Cfg)
 
 
 @dataclass
@@ -144,6 +154,7 @@ class EvaluationCfg:
     stationary_label_threshold_mph: float = 2.0
     speed_buckets: list[BucketCfg] = field(default_factory=list)
     splits_to_evaluate: list[str] = field(default_factory=lambda: ["val", "test"])
+    device: str = "auto"  # "auto" -> cuda if available, else cpu (see resolve_device)
 
 
 @dataclass

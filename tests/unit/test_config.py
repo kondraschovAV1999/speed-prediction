@@ -69,3 +69,17 @@ def test_validate_partial_config_uses_defaults():
     cfg = validate_config(OmegaConf.create({"experiment": {"seed": 7}}))
     assert cfg.experiment.seed == 7
     assert cfg.training.epochs == 5  # default preserved
+
+
+def test_compose_comma2k19():
+    cfg = validate_config(compose_config(["dataset=comma2k19"]))
+    assert cfg.data.source == "comma2k19"
+    assert cfg.data.frame_rate_hz == 20
+    assert cfg.data.window_stride == 5
+    assert cfg.data.comma2k19.cache_image_size == [128, 128]
+    assert cfg.data.comma2k19.max_segments is None
+
+
+def test_evaluation_device_defaults_auto():
+    cfg = validate_config(compose_config())
+    assert cfg.evaluation.device == "auto"

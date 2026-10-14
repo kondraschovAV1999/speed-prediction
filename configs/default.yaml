@@ -65,6 +65,7 @@ evaluation:
     - {name: medium, min_mph: 15, max_mph: 45}
     - {name: high,   min_mph: 45, max_mph: null}
   splits_to_evaluate: [val, test]
+  device: auto
 
 benchmark:
   enabled: true
