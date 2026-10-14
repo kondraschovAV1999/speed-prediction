@@ -20,6 +20,9 @@ def main(cfg: DictConfig) -> None:
     setup_logging(None, level=cfg.logging.level)
     sequences = load_comma2k19_sequences(cfg.data, cfg.experiment.seed)
     logger.info("event=inspect_sequences count=%d", len(sequences))
+    if not sequences:
+        logger.warning("event=inspect_no_sequences")
+        return
     for seq in sequences:
         logger.info(
             "event=inspect_sequence id=%s group=%s frames=%d",
@@ -37,11 +40,16 @@ def main(cfg: DictConfig) -> None:
         float(speeds.max()),
         float(speeds.mean()),
     )
-    split = make_group_split(
-        sorted({s.group_id for s in sequences}), cfg.data.split_ratios, cfg.experiment.seed
-    )
-    for name, groups in split.items():
-        logger.info("event=inspect_split split=%s groups=%d", name, len(groups))
+    group_ids = sorted({s.group_id for s in sequences})
+    if len(group_ids) >= 3:
+        split = make_group_split(group_ids, cfg.data.split_ratios, cfg.experiment.seed)
+        for name, groups in split.items():
+            logger.info("event=inspect_split split=%s groups=%d", name, len(groups))
+    else:
+        logger.warning(
+            "event=inspect_split_skipped groups=%d reason=need_at_least_3_routes_for_a_split",
+            len(group_ids),
+        )
 
 
 if __name__ == "__main__":
