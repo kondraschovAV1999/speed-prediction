@@ -245,10 +245,14 @@ logging:
 | `cnn_lstm` | tiny from-scratch CNN (→ 64-d vector) | LSTM | `[64, 64]` |
 | `resnet_lstm` | **frozen** pretrained ResNet18 (global pool → 512-d) | LSTM | `[128, 128]` |
 | `resnet_convlstm` | **frozen** pretrained ResNet18 (spatial map → 32 ch) | ConvLSTM | `[128, 128]` |
+| `mobilenet_lstm` | **frozen** pretrained MobileNetV3-Small (→ 576-d) | LSTM | `[128, 128]` |
+| `efficientnet_lstm` | **frozen** pretrained EfficientNet-B0 (→ 1280-d) | LSTM | `[128, 128]` |
 
-ResNet18 `encoder` keys: `pretrained: true` (downloads ImageNet weights once,
-cached by torchvision), `frozen: true` (backbone `requires_grad=False` + `eval()`),
-`spatial: true|false`, `weights_path: null` (point at a local `.pth` to run offline).
+Backbone `encoder` keys: `backbone` (resnet18, resnet50, mobilenet_v3_small,
+mobilenet_v3_large, efficientnet_b0), `pretrained: true`, `frozen: true`,
+`spatial: true|false`, `feature_dim` (the backbone's native dim — 512/2048/576/960/1280),
+`weights_path: null` (point at a local `.pth` to run offline). The `encoder.name`
+is `backbone` for the new models; `resnet18` is kept as a legacy alias.
 
 **Note on resolution:** the cache is stored at `comma2k19.cache_image_size`
 (default 128×128). `preprocessing.image_size` resizes at load time, so the model
