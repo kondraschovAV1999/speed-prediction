@@ -35,6 +35,45 @@ python scripts/train.py training.learning_rate=0.001   # override any key
 | `python scripts/predict.py model.checkpoint=<path> input=<dir>` | Stream predictions over a frame folder |
 | `python scripts/visualize.py run=<name>` | Regenerate figures from a run's `predictions.csv` |
 
+## comma2k19 baselines (real data)
+
+Three models are available over the comma2k19 dataset:
+
+| Model | Encoder | Temporal | `preprocessing.image_size` |
+| --- | --- | --- | --- |
+| `cnn_lstm` | tiny from-scratch CNN | LSTM | `[64, 64]` |
+| `resnet_lstm` | frozen pretrained ResNet18 (global pool) | LSTM | `[128, 128]` |
+| `resnet_convlstm` | frozen pretrained ResNet18 (spatial map) | ConvLSTM | `[128, 128]` |
+
+Workflow:
+
+```bash
+# 1. Decode + cache raw data (HEVC -> 128x128 RGB .npz + manifest). ~13 GiB for Chunk_1.
+python scripts/preprocess.py dataset=comma2k19
+# pilot: python scripts/preprocess.py dataset=comma2k19 data.comma2k19.max_segments=10
+
+# 2. Inspect the cache (counts, 20 Hz, speed stats, split sizes).
+python scripts/inspect_data.py dataset=comma2k19
+
+# 3. Train a baseline (add data.window_stride=1 for full overlap; default is 5).
+python scripts/train.py dataset=comma2k19 model=cnn_lstm preprocessing.image_size=[64,64]
+python scripts/train.py dataset=comma2k19 model=resnet_lstm preprocessing.image_size=[128,128]
+python scripts/train.py dataset=comma2k19 model=resnet_convlstm preprocessing.image_size=[128,128]
+```
+
+Notes:
+
+- Cache lives in `data/interim/comma2k19/` (uncompressed `.npz`, memory-mapped at
+  load). Change `data.comma2k19.cache_image_size` to re-cache at another resolution.
+- `data.window_stride` applies to training only; validation/test are always
+  stride 1 (required by the frame-aligned metrics and stationary detector).
+- ResNet weights download once (ImageNet) and are cached by torchvision; point
+  `encoder.weights_path` at a local `.pth` to run offline.
+- Each run exports a standalone `model.pt` (no Lightning wrapper) alongside the
+  Lightning checkpoints.
+- Evaluation/inference device is `evaluation.device` (default `auto` -> GPU when
+  available).
+
 ## Configuration
 
 Configuration is Hydra-based. `configs/default.yaml` is the root; `dataset`,
