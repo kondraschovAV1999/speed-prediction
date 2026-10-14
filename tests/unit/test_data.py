@@ -47,6 +47,13 @@ def small_cfg(frames: int = 60) -> DataCfg:
     )
 
 
+def _ends_by_seq(ds):
+    ends: dict[int, list[int]] = {}
+    for seq_idx, end in ds.window_index:
+        ends.setdefault(seq_idx, []).append(end)
+    return ends
+
+
 # --------------------------------------------------------------------------- #
 # Synthetic data
 # --------------------------------------------------------------------------- #
@@ -271,12 +278,16 @@ class TestDataset:
         assert not (groups["train"] & groups["test"])
         assert not (groups["val"] & groups["test"])
 
-    def test_eval_stride_not_one_raises(self, tiny_config):
+    def test_train_stride_two_val_test_stride_one(self, tiny_config):
         from src.data.dataset import build_datasets
 
         tiny_config.data.window_stride = 2
-        with pytest.raises(DataValidationError):
-            build_datasets(tiny_config, seed=42)
+        datasets = build_datasets(tiny_config, seed=42)
+        for _seq_idx, ends in _ends_by_seq(datasets["train"]).items():
+            assert all(b - a == 2 for a, b in zip(ends, ends[1:], strict=False))
+        for split_name in ("val", "test"):
+            for _seq_idx, ends in _ends_by_seq(datasets[split_name]).items():
+                assert all(b - a == 1 for a, b in zip(ends, ends[1:], strict=False))
 
     def test_build_dataloaders(self, tiny_config):
         from src.data.dataset import build_dataloaders, build_datasets

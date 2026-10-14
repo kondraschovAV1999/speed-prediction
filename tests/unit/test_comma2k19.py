@@ -149,3 +149,30 @@ def test_preprocess_flow_glue(tmp_path: Path, monkeypatch):
     assert len(seqs) == 1
     assert seqs[0].sequence_id == "routeA/0"
     assert seqs[0].speeds_mph.shape == (2,)
+
+
+def test_build_datasets_dispatches_comma2k19(tmp_path: Path):
+    from src.core.config import compose_config, validate_config
+    from src.data.dataset import build_datasets
+
+    cache_dir = tmp_path / "cache"
+    cache_dir.mkdir()
+    manifest_segments = {}
+    for g in range(6):
+        fname = f"route{g}__0.npz"
+        np.savez(
+            cache_dir / fname,
+            frames=np.zeros((20, 8, 8, 3), dtype=np.uint8),
+            speeds_mph=np.ones(20) * 20.0,
+            timestamps=np.arange(20) * 0.05,
+        )
+        manifest_segments[f"route{g}/0"] = {"file": fname, "n_frames": 20, "group_id": f"route{g}"}
+    (cache_dir / "manifest.json").write_text(json.dumps({"segments": manifest_segments}))
+
+    cfg = validate_config(compose_config(["dataset=comma2k19", "preprocessing.image_size=[8,8]"]))
+    cfg.data.comma2k19.cache_dir = str(cache_dir)
+    cfg.data.split_manifest = str(tmp_path / "splits" / "m.json")
+
+    datasets = build_datasets(cfg, seed=42)
+    assert set(datasets) == {"train", "val", "test"}
+    assert all(len(ds) > 0 for ds in datasets.values())

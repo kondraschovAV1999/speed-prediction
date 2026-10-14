@@ -16,7 +16,8 @@ from torch.utils.data import DataLoader, Dataset
 
 from src.core.config import Config, DataCfg
 from src.core.logging_utils import get_logger
-from src.core.schemas import DataValidationError, SpeedSequence
+from src.core.schemas import ConfigError, DataValidationError, SpeedSequence
+from src.data.comma2k19 import load_comma2k19_sequences
 from src.data.preprocessing import build_transform, window_frame_indices
 
 logger = get_logger(__name__)
@@ -352,13 +353,12 @@ def build_datasets(
     """Generate/validate synthetic sequences, split, and build per-split datasets."""
     data_cfg = cfg.data
 
-    if data_cfg.window_stride != 1:
-        raise DataValidationError(
-            f"window_stride={data_cfg.window_stride} is not supported: "
-            "evaluation splits (val/test) require stride 1"
-        )
-
-    sequences = generate_synthetic_sequences(data_cfg, seed)
+    if data_cfg.source == "synthetic":
+        sequences = generate_synthetic_sequences(data_cfg, seed)
+    elif data_cfg.source == "comma2k19":
+        sequences = load_comma2k19_sequences(data_cfg, seed)
+    else:
+        raise ConfigError(f"Unknown data source: {data_cfg.source!r}")
     validated: list[SpeedSequence] = []
     for seq in sequences:
         validated.extend(validate_sequence(seq, data_cfg))
@@ -371,7 +371,8 @@ def build_datasets(
     datasets: dict[str, SpeedDataset] = {}
     for split_name in ("train", "val", "test"):
         split_sequences = [s for s in validated if s.group_id in split[split_name]]
-        windows = _build_split_windows(split_sequences, data_cfg, stride=1)
+        stride = data_cfg.window_stride if split_name == "train" else 1
+        windows = _build_split_windows(split_sequences, data_cfg, stride=stride)
         if not windows:
             raise DataValidationError(
                 f"split {split_name!r} produced zero windows "
