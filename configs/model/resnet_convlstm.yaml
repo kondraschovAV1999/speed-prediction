@@ -1,0 +1,4 @@
+name: resnet_convlstm
+encoder: {name: resnet18, pretrained: true, feature_dim: 32, frozen: true, spatial: true, weights_path: null}
+temporal: {name: convlstm, hidden_size: 32, kernel_size: 3, num_layers: 1}
+checkpoint: null

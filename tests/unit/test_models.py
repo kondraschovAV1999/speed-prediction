@@ -104,3 +104,35 @@ def test_overfit_one_batch():
         opt.step()
     final = F.mse_loss(model(frames), target).item()
     assert final <= 0.7 * initial
+
+
+def test_convlstm_output_shape():
+    from src.models.architectures import ConvLSTM
+
+    m = ConvLSTM(input_dim=8, hidden_size=16, kernel_size=3)
+    out = m(torch.randn(2, 5, 8, 4, 4))
+    assert out.shape == (2, 16, 4, 4)
+
+
+def test_resnet_convlstm_spatial_shape_and_frozen():
+    cfg = ModelCfg(
+        name="resnet_convlstm",
+        encoder={
+            "name": "resnet18",
+            "pretrained": False,
+            "feature_dim": 32,
+            "frozen": True,
+            "spatial": True,
+        },
+        temporal={"name": "convlstm", "hidden_size": 32, "kernel_size": 3, "num_layers": 1},
+        checkpoint=None,
+    )
+    model = build_model(cfg)
+    out = model(torch.randn(2, 3, 3, 128, 128))
+    assert out.shape == (2,)
+    assert torch.isfinite(out).all()
+    # encoder returns a 4-D spatial map with the projected channel count
+    feats = model.encoder(torch.randn(4, 3, 128, 128))
+    assert feats.ndim == 4
+    assert feats.shape[1] == 32
+    assert len([p for p in model.encoder.backbone.parameters() if p.requires_grad]) == 0
