@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import builtins
+import io
 import json
 from pathlib import Path
 
@@ -13,6 +14,13 @@ import src.data.comma2k19 as c2k
 from src.core.config import Comma2k19Cfg, DataCfg
 from src.core.schemas import DataValidationError
 from src.data.comma2k19 import CachedFrameSource, discover_segments
+
+
+def _write_npy(path: Path, arr: np.ndarray) -> None:
+    """Write an npy-format file WITHOUT a .npy extension (mimics comma2k19 data)."""
+    buf = io.BytesIO()
+    np.save(buf, arr)
+    path.write_bytes(buf.getvalue())
 
 
 @pytest.fixture
@@ -61,8 +69,8 @@ def test_cache_segment_mph_conversion(tmp_path: Path, monkeypatch):
     gp = seg / "global_pose"
     gp.mkdir(parents=True)
     velocities = np.array([[3.0, 0.0, 0.0], [0.0, 4.0, 0.0]])  # 3 and 4 m/s
-    np.save(gp / "frame_times.npy", np.array([0.0, 0.05]))
-    np.save(gp / "frame_velocities.npy", velocities)
+    _write_npy(gp / "frame_times", np.array([0.0, 0.05]))
+    _write_npy(gp / "frame_velocities", velocities)
     monkeypatch.setattr(
         c2k, "decode_segment_frames", lambda d, s: np.zeros((2, 4, 4, 3), dtype=np.uint8)
     )
@@ -77,8 +85,8 @@ def test_cache_segment_frame_count_mismatch_raises(tmp_path: Path, monkeypatch):
     seg = tmp_path / "seg"
     gp = seg / "global_pose"
     gp.mkdir(parents=True)
-    np.save(gp / "frame_times.npy", np.array([0.0, 0.05, 0.10]))  # 3 frames
-    np.save(gp / "frame_velocities.npy", np.zeros((3, 3)))
+    _write_npy(gp / "frame_times", np.array([0.0, 0.05, 0.10]))  # 3 frames
+    _write_npy(gp / "frame_velocities", np.zeros((3, 3)))
     monkeypatch.setattr(
         c2k, "decode_segment_frames", lambda d, s: np.zeros((2, 4, 4, 3), dtype=np.uint8)
     )
@@ -126,8 +134,8 @@ def test_preprocess_flow_glue(tmp_path: Path, monkeypatch):
     gp = seg / "global_pose"
     gp.mkdir(parents=True)
     (seg / "video.hevc").write_bytes(b"")
-    np.save(gp / "frame_times.npy", np.array([0.0, 0.05]))
-    np.save(gp / "frame_velocities.npy", np.array([[5.0, 0, 0], [0, 6.0, 0]]))
+    _write_npy(gp / "frame_times", np.array([0.0, 0.05]))
+    _write_npy(gp / "frame_velocities", np.array([[5.0, 0, 0], [0, 6.0, 0]]))
     monkeypatch.setattr(
         c2k, "decode_segment_frames", lambda d, s: np.zeros((2, 4, 4, 3), dtype=np.uint8)
     )

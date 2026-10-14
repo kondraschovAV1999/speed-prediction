@@ -110,8 +110,9 @@ def decode_segment_frames(segment_dir: Path, image_size: tuple[int, int]) -> np.
 def cache_segment(segment_dir: Path, cache_path: Path, image_size: tuple[int, int]) -> dict:
     """Decode + cache one segment to an *uncompressed* .npz; return ``{"n_frames": int}``."""
     global_pose = segment_dir / "global_pose"
-    frame_times = np.load(global_pose / "frame_times.npy")
-    velocities = np.load(global_pose / "frame_velocities.npy")
+    # comma2k19 global_pose arrays are npy-format but stored WITHOUT a .npy extension.
+    frame_times = np.load(global_pose / "frame_times")
+    velocities = np.load(global_pose / "frame_velocities")
     speeds_mph = np.linalg.norm(velocities, axis=1) * MPH_PER_MPS
 
     frames = decode_segment_frames(segment_dir, image_size)

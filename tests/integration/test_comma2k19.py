@@ -20,8 +20,8 @@ def test_decode_one_real_segment():
     assert segments, "no segments found"
     seg_dir = segments[0][2]
     gp = seg_dir / "global_pose"
-    frame_times = np.load(gp / "frame_times.npy")
-    velocities = np.load(gp / "frame_velocities.npy")
+    frame_times = np.load(gp / "frame_times")
+    velocities = np.load(gp / "frame_velocities")
 
     frames = decode_segment_frames(seg_dir, (64, 64))
     assert frames.shape[0] == frame_times.shape[0]
