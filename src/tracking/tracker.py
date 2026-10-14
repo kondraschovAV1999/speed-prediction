@@ -72,6 +72,10 @@ class MLflowTracker(ExperimentTracker):
         self._uri = cfg.tracking.mlflow.tracking_uri or _local_sqlite_uri(
             Path(cfg.paths.output_root)
         )
+        if cfg.tracking.mlflow.tracking_uri is None:
+            # SQLite cannot create the database file if its parent directory is
+            # missing; ensure the local store directory exists up front.
+            (Path(cfg.paths.output_root) / "mlflow").mkdir(parents=True, exist_ok=True)
 
     # -- internal ---------------------------------------------------------- #
     def _safe(self, fn, *args, **kwargs):
