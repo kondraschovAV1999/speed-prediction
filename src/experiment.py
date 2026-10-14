@@ -75,7 +75,7 @@ def run_experiment(cfg: DictConfig) -> RunPaths:
         logger.info("event=model_parameter_count count=%d", count_parameters(model))
 
         # 3. Train (train/val only; test untouched).
-        trainer = build_trainer(cfg, paths)
+        trainer = build_trainer(cfg, paths, tracker=tracker)
         lightning = SpeedLightningModule(model, cfg.training)
         trainer.fit(
             lightning,

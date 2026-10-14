@@ -15,6 +15,7 @@ from torch import Tensor
 from src.core.config import Config, ModelCfg, TrainingCfg
 from src.core.schemas import RunPaths
 from src.models.architectures import BaseSpeedModel, build_model
+from src.tracking.tracker import ExperimentTracker
 
 
 class SpeedLightningModule(L.LightningModule):
@@ -62,8 +63,48 @@ class SpeedLightningModule(L.LightningModule):
         )
 
 
-def build_trainer(cfg: Config, paths: RunPaths) -> L.Trainer:
-    """Build a Lightning Trainer writing everything under ``paths.run_dir``."""
+def _metric_value(value) -> float:
+    """Convert a Lightning metric value (Tensor or float) to a plain float."""
+    if hasattr(value, "item"):
+        return float(value.item())
+    return float(value)
+
+
+class TrackerMetricsCallback(L.Callback):
+    """Forward epoch-level train/val metrics to the :class:`ExperimentTracker`.
+
+    Lightning records ``train/loss``, ``val/loss`` and ``val/mae_mph`` via
+    ``self.log``; this callback copies the epoch-level aggregates to the tracker
+    (e.g. MLflow) so progress is visible per epoch.
+    """
+
+    def __init__(self, tracker: ExperimentTracker):
+        self.tracker = tracker
+
+    def on_train_epoch_end(self, trainer: L.Trainer, pl_module: L.LightningModule) -> None:
+        self._log(trainer, "train/loss_epoch", "train/loss")
+
+    def on_validation_epoch_end(self, trainer: L.Trainer, pl_module: L.LightningModule) -> None:
+        self._log(trainer, "val/loss", "val/mae_mph")
+
+    def _log(self, trainer: L.Trainer, *keys: str) -> None:
+        metrics: dict[str, float] = {}
+        for key in keys:
+            value = trainer.callback_metrics.get(key)
+            if value is not None:
+                metrics[key] = _metric_value(value)
+        if metrics:
+            self.tracker.log_metrics(metrics, step=trainer.current_epoch)
+
+
+def build_trainer(
+    cfg: Config, paths: RunPaths, tracker: ExperimentTracker | None = None
+) -> L.Trainer:
+    """Build a Lightning Trainer writing everything under ``paths.run_dir``.
+
+    If ``tracker`` is given, per-epoch train/val metrics are also forwarded to it
+    (e.g. MLflow) via :class:`TrackerMetricsCallback`.
+    """
     logger = CSVLogger(save_dir=paths.run_dir, name="training_logs")
     checkpoint = ModelCheckpoint(
         dirpath=paths.checkpoints_dir,
@@ -78,10 +119,13 @@ def build_trainer(cfg: Config, paths: RunPaths) -> L.Trainer:
         mode="min",
         patience=cfg.training.early_stopping_patience,
     )
+    callbacks = [checkpoint, early_stopping]
+    if tracker is not None:
+        callbacks.append(TrackerMetricsCallback(tracker))
     return L.Trainer(
         default_root_dir=paths.run_dir,
         logger=logger,
-        callbacks=[checkpoint, early_stopping],
+        callbacks=callbacks,
         max_epochs=cfg.training.epochs,
         accelerator=cfg.training.accelerator,
         devices=cfg.training.devices,

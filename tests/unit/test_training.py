@@ -95,3 +95,32 @@ def test_model_export_roundtrip(tmp_path: Path):
     x = torch.randn(2, 5, 3, 32, 32)
     with torch.no_grad():
         assert torch.allclose(model(x), loaded(x))
+
+
+def test_tracker_metrics_callback_logs_epoch_metrics():
+    from src.models.training import TrackerMetricsCallback
+
+    class SpyTracker:
+        def __init__(self) -> None:
+            self.calls: list = []
+
+        def log_metrics(self, metrics: dict, step: int | None = None) -> None:
+            self.calls.append((metrics, step))
+
+    class FakeTrainer:
+        current_epoch = 3
+        callback_metrics = {
+            "train/loss_epoch": torch.tensor(1.5),
+            "val/loss": torch.tensor(0.5),
+            "val/mae_mph": torch.tensor(2.5),
+        }
+
+    spy = SpyTracker()
+    callback = TrackerMetricsCallback(spy)
+    callback.on_train_epoch_end(FakeTrainer(), None)
+    callback.on_validation_epoch_end(FakeTrainer(), None)
+
+    assert spy.calls == [
+        ({"train/loss_epoch": 1.5}, 3),
+        ({"val/loss": 0.5, "val/mae_mph": 2.5}, 3),
+    ]
