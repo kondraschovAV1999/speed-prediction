@@ -59,6 +59,23 @@ def test_rmse_loss_supported():
     assert torch.isfinite(loss)
 
 
+def test_mae_loss_supported():
+    cfg = make_training_cfg()
+    cfg.loss = "mae"
+    lm = SpeedLightningModule(build_model(make_model_cfg()), cfg)
+    loss = lm.training_step(_batch(), 0)
+    assert torch.isfinite(loss)
+
+
+def test_huber_loss_supported():
+    cfg = make_training_cfg()
+    cfg.loss = "huber"
+    cfg.huber_delta = 2.0
+    lm = SpeedLightningModule(build_model(make_model_cfg()), cfg)
+    loss = lm.training_step(_batch(), 0)
+    assert torch.isfinite(loss)
+
+
 def test_predict_step_returns_metadata():
     lm = SpeedLightningModule(build_model(make_model_cfg()), make_training_cfg())
     out = lm.predict_step(_batch(4), 0)

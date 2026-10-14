@@ -101,7 +101,8 @@ class TrainingCfg:
     learning_rate: float = 0.0001
     weight_decay: float = 0.00001
     optimizer: str = "adamw"
-    loss: str = "mse"  # mse | l1
+    loss: str = "mse"  # mse | l1 | mae | rmse | huber
+    huber_delta: float = 1.0  # only used when loss == "huber" (mph)
     monitor: str = "val/mae_mph"
     early_stopping_patience: int = 5
     gradient_clip_val: float | None = None
@@ -257,8 +258,10 @@ def _validate_semantics(obj: Config) -> None:
         raise ConfigError("stationary persistence frames must be >= 1")
     if obj.postprocessing.smoothing.method not in ("none", "ema", "median"):
         raise ConfigError(f"Unknown smoothing method: {obj.postprocessing.smoothing.method!r}")
-    if obj.training.loss not in ("mse", "l1", "rmse"):
+    if obj.training.loss not in ("mse", "l1", "mae", "rmse", "huber"):
         raise ConfigError(f"Unknown loss: {obj.training.loss!r}")
+    if obj.training.huber_delta <= 0:
+        raise ConfigError("training.huber_delta must be positive")
     if obj.data.on_duplicate_timestamp not in ("raise", "drop_later"):
         raise ConfigError(f"Unknown on_duplicate_timestamp: {obj.data.on_duplicate_timestamp!r}")
     if obj.data.sequence_length < 1:

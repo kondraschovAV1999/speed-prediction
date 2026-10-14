@@ -13,7 +13,7 @@ from lightning.pytorch.loggers import CSVLogger
 from torch import Tensor
 
 from src.core.config import Config, ModelCfg, TrainingCfg
-from src.core.schemas import RunPaths
+from src.core.schemas import ConfigError, RunPaths
 from src.models.architectures import BaseSpeedModel, build_model
 from src.tracking.tracker import ExperimentTracker
 
@@ -23,6 +23,20 @@ def _rmse_loss(pred: Tensor, target: Tensor) -> Tensor:
     return torch.sqrt(F.mse_loss(pred, target) + 1e-8)
 
 
+def _make_loss_fn(cfg: TrainingCfg):
+    """Return the loss function selected by ``cfg.loss`` (mph units)."""
+    if cfg.loss == "mse":
+        return F.mse_loss
+    if cfg.loss in ("l1", "mae"):  # L1 loss == Mean Absolute Error
+        return F.l1_loss
+    if cfg.loss == "rmse":
+        return _rmse_loss
+    if cfg.loss == "huber":
+        delta = cfg.huber_delta
+        return lambda pred, target: F.huber_loss(pred, target, delta=delta)
+    raise ConfigError(f"Unknown loss: {cfg.loss!r}")
+
+
 class SpeedLightningModule(L.LightningModule):
     """Wraps a :class:`BaseSpeedModel` for training/eval with Lightning."""
 
@@ -30,11 +44,7 @@ class SpeedLightningModule(L.LightningModule):
         super().__init__()
         self.model = model
         self.cfg = training_cfg
-        self.loss_fn = {
-            "mse": F.mse_loss,
-            "l1": F.l1_loss,
-            "rmse": _rmse_loss,
-        }[training_cfg.loss]
+        self.loss_fn = _make_loss_fn(training_cfg)
 
     def forward(self, frames: Tensor) -> Tensor:
         return self.model(frames)
