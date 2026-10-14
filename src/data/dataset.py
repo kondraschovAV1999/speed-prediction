@@ -406,5 +406,6 @@ def build_dataloaders(datasets: dict[str, SpeedDataset], cfg: Config) -> dict[st
             shuffle=is_train,
             drop_last=is_train,
             num_workers=cfg.training.num_workers,
+            persistent_workers=cfg.training.num_workers > 0,
         )
     return loaders
