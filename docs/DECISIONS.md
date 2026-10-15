@@ -40,3 +40,14 @@
 | D-B-7 | `weights_path` offline reuse; `model.pt` standalone export per run |
 | D-B-8 | `EncoderRecurrent` generalizes `TinyCNNGRU`; `tiny_cnn_gru` stays registered |
 | D-B-9 | `evaluation.device` (default `auto` -> GPU) |
+
+## ViT baseline (2026-10-15 design)
+
+| ID | Decision |
+| --- | --- |
+| D-V-1 | `vit_lstm` = frozen ImageNet ViT + LSTM + regression head (`EncoderRecurrent`) |
+| D-V-2 | CLS-token feature (768-d); optional `feature_dim` projection |
+| D-V-3 | Input 224x224 (native positional embeddings; no interpolation) |
+| D-V-4 | Frozen backbone (consistent with `resnet_lstm`) |
+| D-V-5 | Variants b16/b32/l16/l32; default `vit_b_16` |
+| D-V-6 | No new dependencies (torchvision ViT) |

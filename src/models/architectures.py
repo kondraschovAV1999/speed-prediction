@@ -85,6 +85,16 @@ _BACKBONES: dict[str, dict] = {
     },
 }
 
+# Pre-trained torchvision Vision Transformers usable as (frozen) CLS-token
+# feature extractors. Keys: build = constructor, weights = Weights enum.
+# ``vit_h_14`` is deliberately excluded (SWAG-only weights, no IMAGENET1K_V1).
+_VIT_BUILDERS: dict[str, tuple] = {
+    "vit_b_16": (tvm.vit_b_16, tvm.ViT_B_16_Weights),
+    "vit_b_32": (tvm.vit_b_32, tvm.ViT_B_32_Weights),
+    "vit_l_16": (tvm.vit_l_16, tvm.ViT_L_16_Weights),
+    "vit_l_32": (tvm.vit_l_32, tvm.ViT_L_32_Weights),
+}
+
 
 class BackboneEncoder(nn.Module):
     """Frozen (or trainable) pre-trained backbone with the classification head removed.
@@ -141,6 +151,51 @@ class BackboneEncoder(nn.Module):
 
     def forward(self, x: Tensor) -> Tensor:  # x: [B, C, H, W]
         return self.proj(self.backbone(x))
+
+
+class ViTEncoder(nn.Module):
+    """Frozen (or trainable) ImageNet ViT feature extractor via the CLS token.
+
+    torchvision's ViT extracts the CLS token internally before applying ``heads``,
+    so replacing ``heads`` with ``Identity`` yields ``[B, hidden]`` per frame
+    directly.  Input is fixed at ``image_size`` (default 224) so the pretrained
+    positional embeddings match; there is no interpolation.
+    """
+
+    def __init__(
+        self,
+        feature_dim: int = 768,
+        pretrained: bool = True,
+        frozen: bool = True,
+        weights_path: str | None = None,
+        variant: str = "vit_b_16",
+        image_size: int = 224,
+    ):
+        super().__init__()
+        if variant not in _VIT_BUILDERS:
+            raise ConfigError(f"Unknown ViT variant {variant!r}. Valid: {sorted(_VIT_BUILDERS)}")
+        build, weights_enum = _VIT_BUILDERS[variant]
+        weights = (
+            None
+            if weights_path is not None
+            else (weights_enum.IMAGENET1K_V1 if pretrained else None)
+        )
+        model = build(weights=weights, image_size=image_size)
+        if weights_path is not None:
+            model.load_state_dict(torch.load(weights_path, map_location="cpu"))
+        native_dim = int(model.hidden_dim)
+        model.heads = nn.Identity()  # forward now returns the CLS token [B, hidden]
+        self.backbone = model
+        self.proj = (
+            nn.Linear(native_dim, feature_dim) if feature_dim != native_dim else nn.Identity()
+        )
+        if frozen:
+            for p in self.backbone.parameters():
+                p.requires_grad_(False)
+            self.backbone.eval()
+
+    def forward(self, x: Tensor) -> Tensor:  # x: [B, C, H, W]
+        return self.proj(self.backbone(x))  # [B, feature_dim]
 
 
 class GRUTemporal(nn.Module):
@@ -254,6 +309,7 @@ ENCODER_REGISTRY: dict[str, type[nn.Module]] = {
     "tiny_cnn": TinyCNNEncoder,
     "resnet18": BackboneEncoder,  # legacy alias (backbone defaults to "resnet18")
     "backbone": BackboneEncoder,
+    "vit": ViTEncoder,
 }
 TEMPORAL_REGISTRY: dict[str, type[nn.Module]] = {
     "gru": GRUTemporal,
@@ -268,6 +324,7 @@ MODEL_REGISTRY: dict[str, type[BaseSpeedModel]] = {
     "resnet_convlstm": EncoderRecurrent,
     "mobilenet_lstm": EncoderRecurrent,
     "efficientnet_lstm": EncoderRecurrent,
+    "vit_lstm": EncoderRecurrent,
 }
 
 

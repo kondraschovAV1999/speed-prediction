@@ -37,13 +37,14 @@ python scripts/train.py training.learning_rate=0.001   # override any key
 
 ## comma2k19 baselines (real data)
 
-Three models are available over the comma2k19 dataset:
+Four models are available over the comma2k19 dataset:
 
 | Model | Encoder | Temporal | `preprocessing.image_size` |
 | --- | --- | --- | --- |
 | `cnn_lstm` | tiny from-scratch CNN | LSTM | `[64, 64]` |
 | `resnet_lstm` | frozen pretrained ResNet18 (global pool) | LSTM | `[128, 128]` |
 | `resnet_convlstm` | frozen pretrained ResNet18 (spatial map) | ConvLSTM | `[128, 128]` |
+| `vit_lstm` | frozen ImageNet ViT-B/16 (CLS token) | LSTM | `[224, 224]` |
 
 Workflow:
 
@@ -59,6 +60,7 @@ python scripts/inspect_data.py dataset=comma2k19
 python scripts/train.py dataset=comma2k19 model=cnn_lstm preprocessing.image_size=[64,64]
 python scripts/train.py dataset=comma2k19 model=resnet_lstm preprocessing.image_size=[128,128]
 python scripts/train.py dataset=comma2k19 model=resnet_convlstm preprocessing.image_size=[128,128]
+python scripts/train.py dataset=comma2k19 model=vit_lstm preprocessing.image_size=[224,224]
 ```
 
 Notes:
@@ -67,8 +69,10 @@ Notes:
   load). Change `data.comma2k19.cache_image_size` to re-cache at another resolution.
 - `data.window_stride` applies to training only; validation/test are always
   stride 1 (required by the frame-aligned metrics and stationary detector).
-- ResNet weights download once (ImageNet) and are cached by torchvision; point
+- ResNet/ViT weights download once (ImageNet) and are cached by torchvision; point
   `encoder.weights_path` at a local `.pth` to run offline.
+- `vit_lstm` uses a frozen ViT-B/16 at 224×224 (CLS token); it is ~5–10× heavier
+  per frame than ResNet18. `model.encoder.variant=vit_b_32` is the cheaper fallback.
 - Each run exports a standalone `model.pt` (no Lightning wrapper) alongside the
   Lightning checkpoints.
 - Evaluation/inference device is `evaluation.device` (default `auto` -> GPU when

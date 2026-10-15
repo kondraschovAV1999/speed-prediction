@@ -196,3 +196,54 @@ def test_unknown_backbone_raises():
     )
     with pytest.raises(ConfigError):
         build_model(cfg)
+
+
+def test_vit_lstm_shape_and_frozen():
+    cfg = ModelCfg(
+        name="vit_lstm",
+        encoder={
+            "name": "vit",
+            "variant": "vit_b_16",
+            "pretrained": False,
+            "feature_dim": 768,
+            "frozen": True,
+            "image_size": 224,
+        },
+        temporal={"name": "lstm", "hidden_size": 64, "num_layers": 1},
+        checkpoint=None,
+    )
+    model = build_model(cfg)
+    out = model(torch.randn(2, 3, 3, 224, 224))
+    assert out.shape == (2,)
+    assert torch.isfinite(out).all()
+    # frozen backbone: zero trainable params inside the ViT backbone
+    assert len([p for p in model.encoder.backbone.parameters() if p.requires_grad]) == 0
+    # temporal + head still trainable, but fewer trainable than total params
+    assert count_parameters(model) > 0
+    assert count_parameters(model) < sum(p.numel() for p in model.parameters())
+
+
+def test_vit_encoder_projects_feature_dim():
+    from src.models.architectures import ViTEncoder
+
+    enc = ViTEncoder(feature_dim=256, pretrained=False, frozen=True, variant="vit_b_16")
+    out = enc(torch.randn(3, 3, 224, 224))
+    assert out.shape == (3, 256)
+    assert torch.isfinite(out).all()
+
+
+def test_unknown_vit_variant_raises():
+    cfg = ModelCfg(
+        name="vit_lstm",
+        encoder={
+            "name": "vit",
+            "variant": "not_a_vit",
+            "pretrained": False,
+            "feature_dim": 768,
+            "frozen": True,
+        },
+        temporal={"name": "lstm", "hidden_size": 64, "num_layers": 1},
+        checkpoint=None,
+    )
+    with pytest.raises(ConfigError):
+        build_model(cfg)
