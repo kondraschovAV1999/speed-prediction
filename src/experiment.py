@@ -89,20 +89,22 @@ def run_experiment(cfg: DictConfig) -> RunPaths:
         loaded_model = load_model_from_checkpoint(best_checkpoint, cfg.model)
         save_model_export(loaded_model, paths.run_dir / "model.pt", cfg.model)
         results: dict = {}
-        prediction_frames: list[pd.DataFrame] = []
-        for split_name in cfg.evaluation.splits_to_evaluate:
+        predictions: dict[str, pd.DataFrame] = {}
+        eval_splits = list(cfg.evaluation.splits_to_evaluate)
+        for split_name in ("train", *eval_splits):
             logger.info("event=evaluate_split_start split=%s", split_name)
             raw_df = collect_raw_predictions(
                 loaded_model, loaders[split_name], cfg.evaluation.device, split_name
             )
             final_df = postprocess_dataframe(raw_df, cfg.postprocessing)
-            results[split_name] = evaluate_predictions(final_df, cfg.evaluation, split_name)
-            prediction_frames.append(final_df)
+            predictions[split_name] = final_df
+            if split_name in eval_splits:
+                results[split_name] = evaluate_predictions(final_df, cfg.evaluation, split_name)
             logger.info("event=evaluate_split_complete split=%s n=%d", split_name, len(final_df))
 
-        predictions_df = pd.concat(prediction_frames, ignore_index=True).sort_values(
-            ["split", "sequence_id", "frame_index"]
-        )
+        predictions_df = pd.concat(
+            [predictions[s] for s in eval_splits], ignore_index=True
+        ).sort_values(["split", "sequence_id", "frame_index"])
 
         # 5. Benchmark + artifacts.
         latency: dict | None = None
@@ -154,10 +156,7 @@ def run_experiment(cfg: DictConfig) -> RunPaths:
         )
         write_predictions_csv(paths, predictions_df)
 
-        test_df = predictions_df[predictions_df["split"] == "test"]
-        test_result = results.get("test")
-        if test_result is not None:
-            generate_all_figures(test_df, test_result, latency_samples, paths)
+        generate_all_figures(predictions, results, latency_samples, paths)
 
         # 6. Log metrics/artifacts and mark completed.
         if "test" in results:

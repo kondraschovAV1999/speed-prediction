@@ -66,12 +66,14 @@ def make_df(speeds=None, stationary=None) -> pd.DataFrame:
     )
 
 
-def test_generate_all_figures_returns_six_pngs(tmp_path):
+def test_generate_all_figures(tmp_path):
     paths = make_paths(tmp_path)
     df = make_df()
     result = evaluate_predictions(df, eval_cfg(), "test")
-    fig_paths = generate_all_figures(df, result, np.array([1.0, 2.0, 3.0]), paths)
-    assert len(fig_paths) == 6
+    fig_paths = generate_all_figures(
+        {"test": df}, {"test": result}, np.array([1.0, 2.0, 3.0]), paths
+    )
+    assert len(fig_paths) == 8
     for p in fig_paths:
         assert p.exists()
         assert p.stat().st_size > 0
@@ -82,8 +84,8 @@ def test_empty_bucket_does_not_raise(tmp_path):
     df = make_df(speeds=[5.0, 10.0, 12.0])  # no high bucket
     result = evaluate_predictions(df, eval_cfg(), "test")
     assert result.buckets["high"]["mae"] is None
-    fig_paths = generate_all_figures(df, result, np.array([1.0]), paths)
-    assert len(fig_paths) == 6
+    fig_paths = generate_all_figures({"test": df}, {"test": result}, np.array([1.0]), paths)
+    assert len(fig_paths) == 8
 
 
 def test_single_class_stationary_does_not_raise(tmp_path):
@@ -91,8 +93,8 @@ def test_single_class_stationary_does_not_raise(tmp_path):
     df = make_df(speeds=[10.0, 20.0, 30.0, 40.0], stationary=[False, False, False, False])
     result = evaluate_predictions(df, eval_cfg(), "test")
     assert result.stationary["n_true_stationary"] == 0
-    fig_paths = generate_all_figures(df, result, np.array([1.0]), paths)
-    assert len(fig_paths) == 6
+    fig_paths = generate_all_figures({"test": df}, {"test": result}, np.array([1.0]), paths)
+    assert len(fig_paths) == 8
 
 
 def test_individual_plots_create_files(tmp_path):
