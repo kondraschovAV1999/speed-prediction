@@ -271,6 +271,7 @@ Compose any combination on the CLI.
 | `mobilenet_v3_small` | frozen ImageNet MobileNetV3-Small | 576 | `[128, 128]` |
 | `efficientnet_b0` | frozen ImageNet EfficientNet-B0 | 1280 | `[128, 128]` |
 | `vit_b_16` | frozen ImageNet ViT-B/16 (CLS token) | 768 | `[224, 224]` |
+| `deeplabv3_resnet50` | frozen DeepLabV3-ResNet50 segmentation backbone | 2048 | `[128, 128]` |
 
 **Temporals** (`temporal=`): `gru` / `lstm` consume a per-frame **vector**;
 `convlstm` consumes a per-frame **spatial map** (only `resnet18`/`resnet50`
@@ -284,6 +285,12 @@ mobilenet_v3_large, efficientnet_b0), `pretrained: true`, `frozen: true`,
 `feature_dim` (default = the backbone's native dim), `weights_path: null` (point
 at a local `.pth` to run offline). `encoder.name` is `backbone` (or the legacy
 alias `resnet18`). **`spatial` is inferred from the temporal module — do not set it.**
+
+`deeplabv3_resnet50` uses the DeepLabV3 **segmentation** backbone
+(`model.backbone(x)['out']`, output stride 8, COCO-segmentation pretrained). It is
+spatial by default: pair with `temporal=convlstm` (1×1-project via `feature_dim`,
+e.g. 32), or use `temporal=lstm|gru` which global-average-pools the map to a
+`feature_dim` vector.
 
 **Head customization** — the head is a configurable MLP regardless of which preset
 you pick. Override any knob:

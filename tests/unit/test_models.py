@@ -292,3 +292,59 @@ def test_unknown_vit_variant_raises():
     )
     with pytest.raises(ConfigError):
         build_model(cfg)
+
+
+def test_deeplabv3_lstm_shape_and_frozen():
+    cfg = ModelCfg(
+        encoder={
+            "name": "deeplabv3",
+            "variant": "resnet50",
+            "pretrained": False,
+            "feature_dim": 512,
+            "frozen": True,
+        },
+        temporal={"name": "lstm", "hidden_size": 64, "num_layers": 1},
+    )
+    model = build_model(cfg)
+    out = model(torch.randn(2, 3, 3, 128, 128))
+    assert out.shape == (2,)
+    assert torch.isfinite(out).all()
+    assert len([p for p in model.encoder.backbone.parameters() if p.requires_grad]) == 0
+    assert count_parameters(model) > 0
+
+
+def test_deeplabv3_convlstm_spatial_shape_and_frozen():
+    cfg = ModelCfg(
+        encoder={
+            "name": "deeplabv3",
+            "variant": "resnet50",
+            "pretrained": False,
+            "feature_dim": 32,
+            "frozen": True,
+        },
+        temporal={"name": "convlstm", "hidden_size": 32, "kernel_size": 3, "num_layers": 1},
+    )
+    model = build_model(cfg)
+    out = model(torch.randn(2, 3, 3, 128, 128))
+    assert out.shape == (2,)
+    assert torch.isfinite(out).all()
+    # encoder returns a 4-D spatial map with the projected channel count (stride 8)
+    feats = model.encoder(torch.randn(4, 3, 128, 128))
+    assert feats.ndim == 4
+    assert feats.shape[1] == 32
+    assert feats.shape[2] == 16  # 128 / 8
+    assert len([p for p in model.encoder.backbone.parameters() if p.requires_grad]) == 0
+
+
+def test_unknown_deeplab_variant_raises():
+    cfg = ModelCfg(
+        encoder={
+            "name": "deeplabv3",
+            "variant": "not_a_variant",
+            "pretrained": False,
+            "feature_dim": 512,
+        },
+        temporal={"name": "lstm", "hidden_size": 64, "num_layers": 1},
+    )
+    with pytest.raises(ConfigError):
+        build_model(cfg)

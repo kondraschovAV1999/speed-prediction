@@ -6,6 +6,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.models as tvm
+import torchvision.models.segmentation as tvseg
 from torch import Tensor
 
 from src.core.config import ModelCfg
@@ -94,6 +95,13 @@ _VIT_BUILDERS: dict[str, tuple] = {
     "vit_b_32": (tvm.vit_b_32, tvm.ViT_B_32_Weights),
     "vit_l_16": (tvm.vit_l_16, tvm.ViT_L_16_Weights),
     "vit_l_32": (tvm.vit_l_32, tvm.ViT_L_32_Weights),
+}
+
+# DeepLabV3 segmentation backbones (output stride 8). Keys: build = constructor,
+# weights = Weights enum, dim = native feature dim of ``backbone(x)['out']``.
+_DEEPLAB_BUILDERS: dict[str, tuple] = {
+    "resnet50": (tvseg.deeplabv3_resnet50, tvseg.DeepLabV3_ResNet50_Weights, 2048),
+    "resnet101": (tvseg.deeplabv3_resnet101, tvseg.DeepLabV3_ResNet101_Weights, 2048),
 }
 
 
@@ -199,6 +207,62 @@ class ViTEncoder(nn.Module):
         return self.proj(self.backbone(x))  # [B, feature_dim]
 
 
+class DeepLabV3Encoder(nn.Module):
+    """DeepLabV3 segmentation backbone used as a (frozen) dense feature extractor.
+
+    Reads ``model.backbone(x)['out']`` (output stride 8). ``spatial=True`` keeps
+    the dense map (1x1-projected to ``feature_dim`` channels) for a ConvLSTM;
+    ``spatial=False`` global-average-pools to a ``[B, feature_dim]`` vector for
+    LSTM/GRU. Weights are COCO-segmentation pretrained (no ImageNet variant).
+    """
+
+    def __init__(
+        self,
+        feature_dim: int = 2048,
+        pretrained: bool = True,
+        frozen: bool = True,
+        spatial: bool = False,
+        weights_path: str | None = None,
+        variant: str = "resnet50",
+    ):
+        super().__init__()
+        if variant not in _DEEPLAB_BUILDERS:
+            raise ConfigError(
+                f"Unknown DeepLabV3 variant {variant!r}. Valid: {sorted(_DEEPLAB_BUILDERS)}"
+            )
+        build, weights_enum, native_dim = _DEEPLAB_BUILDERS[variant]
+        weights = (
+            None
+            if weights_path is not None
+            else (weights_enum.COCO_WITH_VOC_LABELS_V1 if pretrained else None)
+        )
+        model = build(weights=weights)
+        if weights_path is not None:
+            model.load_state_dict(torch.load(weights_path, map_location="cpu"))
+        self.backbone = model.backbone  # IntermediateLayerGetter -> {'out': [B, C, H/8, W/8]}
+        if spatial:
+            self.proj = (
+                nn.Conv2d(native_dim, feature_dim, 1)
+                if feature_dim != native_dim
+                else nn.Identity()
+            )
+        else:
+            self.proj = (
+                nn.Linear(native_dim, feature_dim) if feature_dim != native_dim else nn.Identity()
+            )
+        self.spatial = spatial
+        if frozen:
+            for p in self.backbone.parameters():
+                p.requires_grad_(False)
+            self.backbone.eval()
+
+    def forward(self, x: Tensor) -> Tensor:  # x: [B, C, H, W]
+        out = self.backbone(x)["out"]  # [B, native_dim, H/8, W/8]
+        if self.spatial:
+            return self.proj(out)  # [B, feature_dim, H/8, W/8]
+        return self.proj(out.mean(dim=(2, 3)))  # [B, feature_dim]
+
+
 class GRUTemporal(nn.Module):
     """GRU over the per-frame feature sequence; returns the last timestep."""
 
@@ -273,7 +337,7 @@ _ACTIVATIONS: dict[str, type[nn.Module]] = {
 }
 
 # Encoders that support a spatial stem (feed a ConvLSTM); the rest are vector-only.
-_SPATIAL_ENCODERS = {"backbone", "resnet18"}
+_SPATIAL_ENCODERS = {"backbone", "resnet18", "deeplabv3"}
 
 
 def _build_head(input_dim: int, head: dict) -> nn.Module:
@@ -353,6 +417,7 @@ ENCODER_REGISTRY: dict[str, type[nn.Module]] = {
     "resnet18": BackboneEncoder,  # legacy alias (backbone defaults to "resnet18")
     "backbone": BackboneEncoder,
     "vit": ViTEncoder,
+    "deeplabv3": DeepLabV3Encoder,
 }
 TEMPORAL_REGISTRY: dict[str, type[nn.Module]] = {
     "gru": GRUTemporal,

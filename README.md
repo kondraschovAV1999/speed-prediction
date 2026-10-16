@@ -40,7 +40,7 @@ python scripts/train.py training.learning_rate=0.001   # override any key
 Models are composed from three Hydra groups — `encoder`, `temporal`, `head` —
 selected on the CLI (no file per combination).
 
-- `encoder=` `tiny_cnn`, `resnet18`, `resnet50`, `mobilenet_v3_small`, `efficientnet_b0`, `vit_b_16`
+- `encoder=` `tiny_cnn`, `resnet18`, `resnet50`, `mobilenet_v3_small`, `efficientnet_b0`, `vit_b_16`, `deeplabv3_resnet50`
 - `temporal=` `gru`, `lstm`, `convlstm`
 - `head=` `linear`, `mlp`
 
