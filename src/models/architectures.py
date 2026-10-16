@@ -177,13 +177,13 @@ class ViTEncoder(nn.Module):
         pretrained: bool = True,
         frozen: bool = True,
         weights_path: str | None = None,
-        variant: str = "vit_b_16",
+        backbone: str = "vit_b_16",
         image_size: int = 224,
     ):
         super().__init__()
-        if variant not in _VIT_BUILDERS:
-            raise ConfigError(f"Unknown ViT variant {variant!r}. Valid: {sorted(_VIT_BUILDERS)}")
-        build, weights_enum = _VIT_BUILDERS[variant]
+        if backbone not in _VIT_BUILDERS:
+            raise ConfigError(f"Unknown ViT backbone {backbone!r}. Valid: {sorted(_VIT_BUILDERS)}")
+        build, weights_enum = _VIT_BUILDERS[backbone]
         weights = (
             None
             if weights_path is not None
@@ -223,14 +223,14 @@ class DeepLabV3Encoder(nn.Module):
         frozen: bool = True,
         spatial: bool = False,
         weights_path: str | None = None,
-        variant: str = "resnet50",
+        backbone: str = "resnet50",
     ):
         super().__init__()
-        if variant not in _DEEPLAB_BUILDERS:
+        if backbone not in _DEEPLAB_BUILDERS:
             raise ConfigError(
-                f"Unknown DeepLabV3 variant {variant!r}. Valid: {sorted(_DEEPLAB_BUILDERS)}"
+                f"Unknown DeepLabV3 backbone {backbone!r}. Valid: {sorted(_DEEPLAB_BUILDERS)}"
             )
-        build, weights_enum, native_dim = _DEEPLAB_BUILDERS[variant]
+        build, weights_enum, native_dim = _DEEPLAB_BUILDERS[backbone]
         weights = (
             None
             if weights_path is not None

@@ -60,7 +60,7 @@ def test_mlp_head_shape():
 
 def test_convlstm_with_vector_encoder_raises():
     cfg = ModelCfg(
-        encoder={"name": "vit", "variant": "vit_b_16", "pretrained": False, "feature_dim": 768},
+        encoder={"name": "vit", "backbone": "vit_b_16", "pretrained": False, "feature_dim": 768},
         temporal={"name": "convlstm", "hidden_size": 32, "kernel_size": 3, "num_layers": 1},
     )
     with pytest.raises(ConfigError):
@@ -248,7 +248,7 @@ def test_vit_lstm_shape_and_frozen():
         name="vit_lstm",
         encoder={
             "name": "vit",
-            "variant": "vit_b_16",
+            "backbone": "vit_b_16",
             "pretrained": False,
             "feature_dim": 768,
             "frozen": True,
@@ -271,18 +271,18 @@ def test_vit_lstm_shape_and_frozen():
 def test_vit_encoder_projects_feature_dim():
     from src.models.architectures import ViTEncoder
 
-    enc = ViTEncoder(feature_dim=256, pretrained=False, frozen=True, variant="vit_b_16")
+    enc = ViTEncoder(feature_dim=256, pretrained=False, frozen=True, backbone="vit_b_16")
     out = enc(torch.randn(3, 3, 224, 224))
     assert out.shape == (3, 256)
     assert torch.isfinite(out).all()
 
 
-def test_unknown_vit_variant_raises():
+def test_unknown_vit_backbone_raises():
     cfg = ModelCfg(
         name="vit_lstm",
         encoder={
             "name": "vit",
-            "variant": "not_a_vit",
+            "backbone": "not_a_vit",
             "pretrained": False,
             "feature_dim": 768,
             "frozen": True,
@@ -298,7 +298,7 @@ def test_deeplabv3_lstm_shape_and_frozen():
     cfg = ModelCfg(
         encoder={
             "name": "deeplabv3",
-            "variant": "resnet50",
+            "backbone": "resnet50",
             "pretrained": False,
             "feature_dim": 512,
             "frozen": True,
@@ -317,7 +317,7 @@ def test_deeplabv3_convlstm_spatial_shape_and_frozen():
     cfg = ModelCfg(
         encoder={
             "name": "deeplabv3",
-            "variant": "resnet50",
+            "backbone": "resnet50",
             "pretrained": False,
             "feature_dim": 32,
             "frozen": True,
@@ -336,11 +336,11 @@ def test_deeplabv3_convlstm_spatial_shape_and_frozen():
     assert len([p for p in model.encoder.backbone.parameters() if p.requires_grad]) == 0
 
 
-def test_unknown_deeplab_variant_raises():
+def test_unknown_deeplab_backbone_raises():
     cfg = ModelCfg(
         encoder={
             "name": "deeplabv3",
-            "variant": "not_a_variant",
+            "backbone": "not_a_backbone",
             "pretrained": False,
             "feature_dim": 512,
         },

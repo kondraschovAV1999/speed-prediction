@@ -1,6 +1,6 @@
 # @package model.encoder
 name: vit
-variant: vit_b_16
+backbone: vit_b_16
 pretrained: true
 feature_dim: 768
 frozen: true
