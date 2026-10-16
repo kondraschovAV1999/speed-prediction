@@ -266,9 +266,9 @@ uint8 [H,W,C]  → Resize(image_size) → ToTensor (→ [C,H,W] float in [0,1]) 
 ```
 
 `mean=[0.485,0.456,0.406]`, `std=[0.229,0.224,0.225]` are the **ImageNet RGB
-constants** (hardcoded, not fitted) — required so the pretrained ResNet18 weights
-are used correctly. `image_size` must match the model (64 for `cnn_lstm`, 128 for
-ResNet models).
+constants** (hardcoded, not fitted) — required so the pretrained ResNet/ViT weights
+are used correctly. `image_size` must match the encoder (64 for `tiny_cnn`, 128 for
+the ResNet/MobileNet/EfficientNet backbones, 224 for `vit_b_16`).
 
 ### 4.6 `SpeedDataset` / DataLoader
 
@@ -287,18 +287,21 @@ One generic class composes everything:
 EncoderRecurrent:  encoder → (per-frame features) → temporal → head → [B]
 ```
 
-- **Encoders** (→ a per-frame *vector* or *spatial map*):
+- **Encoders** (`encoder=`, → a per-frame *vector* or *spatial map*):
   - `tiny_cnn` — small from-scratch CNN → 64-d vector.
-  - `resnet18` — torchvision ResNet18, head removed; **frozen** (`requires_grad=False`
-    + `eval()`), `spatial=False` → global-pooled 512-d vector, `spatial=True` →
-    1×1-projected spatial map.
-- **Temporal** (over the T per-frame features):
+  - `resnet18` / `resnet50` / `mobilenet_v3_small` / `efficientnet_b0` — frozen
+    ImageNet backbones (head removed), global-pooled to their native dim.
+  - `vit_b_16` — frozen ImageNet ViT-B/16, CLS token → 768-d.
+- **Temporal** (`temporal=`, over the T per-frame features):
   - `gru`, `lstm` (vector path), `convlstm` (spatial path).
-- `forward` dispatches on whether the encoder output is 2-D (vector → LSTM/GRU) or
-  4-D (spatial → ConvLSTM).
+- **Head** (`head=`, regression):
+  - `linear` — single `Linear(hidden → 1)`.
+  - `mlp` — configurable `hidden_dims`/`activation`/`dropout`.
+- `spatial` is inferred from `temporal=convlstm`; `forward` dispatches on whether
+  the encoder output is 2-D (vector → LSTM/GRU) or 4-D (spatial → ConvLSTM).
 
-Registered models: `tiny_cnn_gru`, `cnn_lstm`, `resnet_lstm`, `resnet_convlstm`.
-See `src/models/architectures.py` and `configs/model/*.yaml`.
+Compose on the CLI, e.g. `encoder=resnet50 temporal=gru head=mlp`. See
+`src/models/architectures.py` and `configs/{encoder,temporal,head}/*.yaml`.
 
 ---
 
@@ -368,10 +371,10 @@ output/mlflow/mlflow.db  # MLflow SQLite store (view: mlflow ui --backend-store-
 python scripts/preprocess.py dataset=comma2k19
 python scripts/inspect_data.py dataset=comma2k19
 
-# 2. Train (model + image_size must match)
-python scripts/train.py dataset=comma2k19 model=cnn_lstm        preprocessing.image_size=[64,64]
-python scripts/train.py dataset=comma2k19 model=resnet_lstm     preprocessing.image_size=[128,128]
-python scripts/train.py dataset=comma2k19 model=resnet_convlstm preprocessing.image_size=[128,128]
+# 2. Train (encoder + image_size must match)
+python scripts/train.py dataset=comma2k19 encoder=tiny_cnn  temporal=lstm     preprocessing.image_size=[64,64]
+python scripts/train.py dataset=comma2k19 encoder=resnet18  temporal=lstm     preprocessing.image_size=[128,128]
+python scripts/train.py dataset=comma2k19 encoder=resnet18  temporal=convlstm preprocessing.image_size=[128,128]
 
 # 3. Browse experiments
 mlflow ui --backend-store-uri sqlite:///output/mlflow/mlflow.db

@@ -8,7 +8,8 @@ section, the comma2k19 (real-data) workflow, and common overrides.
 ## 1. How configuration works
 
 Configuration is **Hydra**-based. `configs/default.yaml` is the root config and
-selects a **dataset**, a **model**, and an **experiment** from config *groups*:
+selects a **dataset**, an **encoder** / **temporal** / **head**, and an
+**experiment** from config *groups*:
 
 ```text
 configs/
@@ -17,11 +18,20 @@ configs/
 ├── dataset/
 │   ├── synthetic.yaml        # synthetic striped-video data (M1)
 │   └── comma2k19.yaml        # real comma2k19 dashcam data (M2)
-├── model/
-│   ├── tiny_cnn_gru.yaml     # M1 skeleton
-│   ├── cnn_lstm.yaml
-│   ├── resnet_lstm.yaml
-│   └── resnet_convlstm.yaml
+├── encoder/                  # spatial feature extractor
+│   ├── tiny_cnn.yaml
+│   ├── resnet18.yaml
+│   ├── resnet50.yaml
+│   ├── mobilenet_v3_small.yaml
+│   ├── efficientnet_b0.yaml
+│   └── vit_b_16.yaml
+├── temporal/                 # temporal aggregator
+│   ├── gru.yaml
+│   ├── lstm.yaml
+│   └── convlstm.yaml
+├── head/                     # regression head
+│   ├── linear.yaml           # single Linear(hidden → 1)
+│   └── mlp.yaml              # 2 hidden layers + ReLU + dropout
 └── experiment/
     ├── baseline.yaml         # normal run
     └── smoke.yaml            # fast CI-style run
@@ -30,7 +40,7 @@ configs/
 You override anything on the command line with dot paths:
 
 ```bash
-python scripts/train.py dataset=comma2k19 model=resnet_lstm preprocessing.image_size=[128,128] training.epochs=10
+python scripts/train.py dataset=comma2k19 encoder=resnet18 temporal=lstm preprocessing.image_size=[128,128] training.epochs=10
 ```
 
 Downstream code always receives a **typed config** (`src.core.config.Config`) —
@@ -43,9 +53,9 @@ never raw dicts — so a typo or wrong type raises a clear `ConfigError`.
 ### 2.1 Synthetic (M1, no data required)
 
 ```bash
-python scripts/train.py                              # baseline (tiny_cnn_gru)
-python scripts/train.py experiment=smoke             # fast CI-style run
-python scripts/train.py training.learning_rate=0.001 # override anything
+python scripts/train.py encoder=tiny_cnn temporal=gru   # small from-scratch baseline
+python scripts/train.py experiment=smoke                # fast CI-style run
+python scripts/train.py training.learning_rate=0.001    # override anything
 ```
 
 ### 2.2 comma2k19 (real data)
@@ -61,9 +71,9 @@ python scripts/inspect_data.py dataset=comma2k19
 
 # 3. Train a baseline. The cache is NOT touched by window/model/hyperparameter
 #    changes, so you can sweep these freely without re-running preprocess.
-python scripts/train.py dataset=comma2k19 model=cnn_lstm        preprocessing.image_size=[64,64]
-python scripts/train.py dataset=comma2k19 model=resnet_lstm     preprocessing.image_size=[128,128]
-python scripts/train.py dataset=comma2k19 model=resnet_convlstm preprocessing.image_size=[128,128]
+python scripts/train.py dataset=comma2k19 encoder=tiny_cnn  temporal=lstm      preprocessing.image_size=[64,64]
+python scripts/train.py dataset=comma2k19 encoder=resnet18  temporal=lstm      preprocessing.image_size=[128,128]
+python scripts/train.py dataset=comma2k19 encoder=resnet18  temporal=convlstm  preprocessing.image_size=[128,128]
 ```
 
 ---
@@ -145,17 +155,26 @@ frame `t`; the label is the speed at `t` (causal — no future frames).
 - larger stride = fewer training windows = faster epochs (less redundant data),
 - does **not** affect inference cost, and does **not** require re-preprocessing.
 
-### 3.5 `model` (provided by the model group)
+### 3.5 `model` (`encoder` + `temporal` + `head`)
+
+The model is composed from three groups into a single `EncoderRecurrent`
+(`encoder → per-frame features → temporal → head`):
 
 ```yaml
-name: cnn_lstm                # registry key in src/models/architectures.py
-encoder: {name: tiny_cnn, pretrained: false, feature_dim: 64}
-temporal: {name: lstm, hidden_size: 32, num_layers: 1}
-checkpoint: null              # optional path to resume from
+model:
+  name: encoder_recurrent     # label only (used in the model.pt export)
+  encoder: {name: backbone, backbone: resnet18, pretrained: true, feature_dim: 512, frozen: true, weights_path: null}
+  temporal: {name: lstm, hidden_size: 64, num_layers: 1}
+  head: {hidden_dims: [], activation: none, dropout: 0.0}
+  checkpoint: null            # optional path to resume from
 ```
 
-The generic model composes `encoder -> per-frame features -> temporal -> head`.
-Encoders/temporal modules are registered by name (see §4).
+- `encoder=` selects the spatial extractor; `temporal=` the aggregator; `head=` the
+  regression head (§4).
+- `spatial` is inferred: `temporal=convlstm` → spatial map, `lstm`/`gru` → vector.
+- The head is a configurable MLP: `head.hidden_dims` = intermediate widths
+  (`[]` = single linear), `head.activation` = `none|relu|gelu|leaky_relu|tanh|sigmoid`,
+  `head.dropout` applied between hidden layers.
 
 ### 3.6 `training`
 
@@ -238,27 +257,47 @@ logging:
 
 ---
 
-## 4. Models and required `preprocessing.image_size`
+## 4. Models: encoder × temporal × head
 
-| Model | Encoder | Temporal | `preprocessing.image_size` |
+Compose any combination on the CLI.
+
+**Encoders** (`encoder=`):
+
+| Option | Encoder | native `feature_dim` | `preprocessing.image_size` |
 | --- | --- | --- | --- |
-| `tiny_cnn_gru` | tiny from-scratch CNN (→ 64-d vector) | GRU | `[32, 32]` |
-| `cnn_lstm` | tiny from-scratch CNN (→ 64-d vector) | LSTM | `[64, 64]` |
-| `resnet_lstm` | **frozen** pretrained ResNet18 (global pool → 512-d) | LSTM | `[128, 128]` |
-| `resnet_convlstm` | **frozen** pretrained ResNet18 (spatial map → 32 ch) | ConvLSTM | `[128, 128]` |
-| `mobilenet_lstm` | **frozen** pretrained MobileNetV3-Small (→ 576-d) | LSTM | `[128, 128]` |
-| `efficientnet_lstm` | **frozen** pretrained EfficientNet-B0 (→ 1280-d) | LSTM | `[128, 128]` |
+| `tiny_cnn` | small from-scratch CNN | 64 | `[64, 64]` |
+| `resnet18` | frozen ImageNet ResNet18 | 512 | `[128, 128]` |
+| `resnet50` | frozen ImageNet ResNet50 | 2048 | `[128, 128]` |
+| `mobilenet_v3_small` | frozen ImageNet MobileNetV3-Small | 576 | `[128, 128]` |
+| `efficientnet_b0` | frozen ImageNet EfficientNet-B0 | 1280 | `[128, 128]` |
+| `vit_b_16` | frozen ImageNet ViT-B/16 (CLS token) | 768 | `[224, 224]` |
+
+**Temporals** (`temporal=`): `gru` / `lstm` consume a per-frame **vector**;
+`convlstm` consumes a per-frame **spatial map** (only `resnet18`/`resnet50`
+backbone encoders; `vit`/`tiny_cnn` are vector-only).
+
+**Heads** (`head=`): `linear` (single `Linear(hidden → 1)`) or `mlp` (two hidden
+layers `[128, 64]` + ReLU + dropout). Both are overridable — see below.
 
 Backbone `encoder` keys: `backbone` (resnet18, resnet50, mobilenet_v3_small,
 mobilenet_v3_large, efficientnet_b0), `pretrained: true`, `frozen: true`,
-`spatial: true|false`, `feature_dim` (the backbone's native dim — 512/2048/576/960/1280),
-`weights_path: null` (point at a local `.pth` to run offline). The `encoder.name`
-is `backbone` for the new models; `resnet18` is kept as a legacy alias.
+`feature_dim` (default = the backbone's native dim), `weights_path: null` (point
+at a local `.pth` to run offline). `encoder.name` is `backbone` (or the legacy
+alias `resnet18`). **`spatial` is inferred from the temporal module — do not set it.**
+
+**Head customization** — the head is a configurable MLP regardless of which preset
+you pick. Override any knob:
+
+```bash
+head.hidden_dims=[32,16,32] head.activation=gelu head.dropout=0.2
+```
+
+`head.activation` accepts `none|relu|gelu|leaky_relu|tanh|sigmoid`.
 
 **Note on resolution:** the cache is stored at `comma2k19.cache_image_size`
 (default 128×128). `preprocessing.image_size` resizes at load time, so the model
-input can be ≤ the cache size without re-preprocessing. If you want native 224×224
-ResNet, re-cache with `data.comma2k19.cache_image_size=[224,224]` first.
+input can be ≤ the cache size without re-preprocessing. For native 224×224 input
+(ViT), re-cache with `data.comma2k19.cache_image_size=[224,224]` first.
 
 ---
 
@@ -311,7 +350,7 @@ plus `output/logs/<name>.log` and figures under `output/figures/<name>/`.
   `setup_logging` re-enables them. If you ever see silent scripts again, check
   `logging.level`.
 - **`OpenCV is required …`** — install the optional extra: `pip install -e ".[video]"`.
-- **ResNet download fails / offline** — set `encoder.weights_path` to a local
-  `.pth` (or run once online so torchvision caches it).
+- **ResNet/ViT download fails / offline** — set `model.encoder.weights_path` to a
+  local `.pth` (or run once online so torchvision caches it).
 - **Slow preprocessing** — it's decoding H.265; reduce work with
   `data.comma2k19.max_segments=N` or `data.comma2k19.cache_image_size=[64,64]`.
