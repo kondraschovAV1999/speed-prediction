@@ -28,6 +28,23 @@ def test_compose_override_learning_rate():
     assert cfg.training.learning_rate == 0.001
 
 
+def test_compose_model_defaults():
+    cfg = compose_config()
+    assert cfg.model.encoder.name == "backbone"
+    assert cfg.model.encoder.backbone == "resnet18"
+    assert cfg.model.temporal.name == "convlstm"
+    assert cfg.model.head.activation == "none"
+    assert cfg.model.head.hidden_dims == []
+
+
+def test_compose_encoder_temporal_head():
+    cfg = compose_config(["encoder=resnet50", "temporal=gru", "head=mlp"])
+    assert cfg.model.encoder.backbone == "resnet50"
+    assert cfg.model.temporal.name == "gru"
+    assert cfg.model.head.activation == "relu"
+    assert cfg.model.head.hidden_dims == [128, 64]
+
+
 def test_validate_returns_typed_config():
     cfg = validate_config(compose_config())
     assert isinstance(cfg, Config)

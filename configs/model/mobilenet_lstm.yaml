@@ -1,4 +1,0 @@
-name: mobilenet_lstm
-encoder: {name: backbone, backbone: mobilenet_v3_small, pretrained: true, feature_dim: 576, frozen: true, spatial: false, weights_path: null}
-temporal: {name: lstm, hidden_size: 64, num_layers: 1}
-checkpoint: null

@@ -1,0 +1,4 @@
+# @package model.head
+hidden_dims: []
+activation: none
+dropout: 0.0

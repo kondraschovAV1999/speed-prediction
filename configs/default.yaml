@@ -1,7 +1,9 @@
 defaults:
   - _self_
   - dataset: comma2k19
-  - model: efficientnet_lstm
+  - encoder: resnet18
+  - temporal: convlstm
+  - head: linear
   - experiment: baseline
   - override hydra/job_logging: disabled   # we configure logging ourselves
   - override hydra/hydra_logging: disabled
@@ -25,54 +27,60 @@ experiment:
 # `data` is provided by the dataset group (see dataset/synthetic.yaml)
 
 preprocessing:
-  image_size: [32, 32]      # [H, W]
+  image_size: [ 128, 128 ]      # [H, W]
   normalize: true
-  mean: [0.485, 0.456, 0.406]   # fixed constants, NOT fitted on data
-  std:  [0.229, 0.224, 0.225]
+  mean: [ 0.485, 0.456, 0.406 ]   # fixed constants, NOT fitted on data
+  std: [ 0.229, 0.224, 0.225 ]
 
-# `model` is provided by the model group
+# `encoder`, `temporal`, and `head` are provided by their config groups.
+model:
+  name: encoder_recurrent   # label only (used in the standalone model export)
+  checkpoint: null
 
 training:
   batch_size: 64
   epochs: 100
-  learning_rate: 0.001
-  weight_decay: 0.00001
+  learning_rate: 0.002
+  weight_decay: 0.00005
   optimizer: adamw
-  loss: l1                 # mse | l1 | mae | rmse | huber
+  loss: mse                 # mse | l1 | mae | rmse | huber
   huber_delta: 1.0         # mph; only used when loss=huber
   monitor: val/mae_mph
   early_stopping_patience: 5
   gradient_clip_val: null
   accelerator: auto
   devices: 1
-  precision: "32-true"
+  precision: "16-mixed"
   num_workers: 0
 
 postprocessing:
-  clip:      {enabled: true, min_mph: 0.0, max_mph: null}
-  smoothing: {method: none, ema_alpha: 0.5, median_window: 5}   # none | ema | median (causal)
+  clip: { enabled: true, min_mph: 0.0, max_mph: null }
+  smoothing: { method: median, ema_alpha: 0.5, median_window: 10 }   # none | ema | median (causal)
   stationary:
     enabled: true
-    enter_threshold_mph: 2.0      # speed <= enter for N consecutive frames -> STOPPED
-    exit_threshold_mph: 2.5       # speed >  exit  for M consecutive frames -> MOVING
+    enter_threshold_mph: 2.5      # speed <= enter for N consecutive frames -> STOPPED
+    exit_threshold_mph: 3.5       # speed >  exit  for M consecutive frames -> MOVING
     enter_persistence_frames: 3
     exit_persistence_frames: 3
     initial_state: moving
 
 evaluation:
   stationary_label_threshold_mph: 2.0   # ground truth only: true_stationary = true_speed <= this
-  speed_buckets:                        # lower bound inclusive, upper exclusive
-    - {name: low,    min_mph: 0,  max_mph: 15}
-    - {name: medium, min_mph: 15, max_mph: 45}
-    - {name: high,   min_mph: 45, max_mph: null}
-  splits_to_evaluate: [val, test]
+  speed_buckets: # lower bound inclusive, upper exclusive
+    - { name: '0-5',    min_mph: 0,  max_mph: 5 }
+    - { name: '5-10',    min_mph: 5,  max_mph: 10 }
+    - { name: "10-20",    min_mph: 10,  max_mph: 20 }
+    - { name: "20-40", min_mph: 20, max_mph: 40 }
+    - { name: "40-60", min_mph: 40, max_mph: 60 }
+    - { name: "60+",   min_mph: 60, max_mph: null }
+  splits_to_evaluate: [ val, test ]
   device: auto
 
 benchmark:
   enabled: true
   device: auto
-  num_warmup: 5
-  num_iters: 10
+  num_warmup: 2
+  num_iters: 3
 
 tracking:
   enabled: true

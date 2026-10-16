@@ -88,9 +88,10 @@ class PreprocessingCfg:
 
 @dataclass
 class ModelCfg:
-    name: str = "tiny_cnn_gru"
+    name: str = "encoder_recurrent"
     encoder: dict[str, Any] = field(default_factory=dict)
     temporal: dict[str, Any] = field(default_factory=dict)
+    head: dict[str, Any] = field(default_factory=dict)
     checkpoint: str | None = None
 
 

@@ -51,3 +51,14 @@
 | D-V-4 | Frozen backbone (consistent with `resnet_lstm`) |
 | D-V-5 | Variants b16/b32/l16/l32; default `vit_b_16` |
 | D-V-6 | No new dependencies (torchvision ViT) |
+
+## Composable model config (2026-10-16 design)
+
+| ID | Decision |
+| --- | --- |
+| D-F-1 | `encoder`/`temporal`/`head` composable config groups; `model` namespace kept |
+| D-F-2 | `spatial` inferred from `temporal.name == "convlstm"` |
+| D-F-3 | Head MLP via `hidden_dims` + global `activation`/`dropout`; `[]` = single linear |
+| D-F-4 | `MODEL_REGISTRY` removed; `build_model` always builds `EncoderRecurrent` |
+| D-F-5 | `model.name` is a label (default `encoder_recurrent`) |
+| D-F-6 | Encoder files use native `feature_dim`; override for lighter heads |

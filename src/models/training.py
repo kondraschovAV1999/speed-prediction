@@ -178,6 +178,7 @@ def save_model_export(model: BaseSpeedModel, path: Path | str, cfg: ModelCfg) ->
         "model_name": cfg.name,
         "encoder": cfg.encoder,
         "temporal": cfg.temporal,
+        "head": cfg.head,
     }
     torch.save(payload, str(path))
 
@@ -186,7 +187,10 @@ def load_model_export(path: Path | str) -> BaseSpeedModel:
     """Load a standalone model export produced by :func:`save_model_export`."""
     payload = torch.load(str(path), map_location="cpu", weights_only=False)
     cfg = ModelCfg(
-        name=payload["model_name"], encoder=payload["encoder"], temporal=payload["temporal"]
+        name=payload.get("model_name", "encoder_recurrent"),
+        encoder=payload["encoder"],
+        temporal=payload["temporal"],
+        head=payload.get("head", {}),
     )
     model = build_model(cfg)
     model.load_state_dict(payload["state_dict"])

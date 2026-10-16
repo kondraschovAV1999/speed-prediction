@@ -37,14 +37,19 @@ python scripts/train.py training.learning_rate=0.001   # override any key
 
 ## comma2k19 baselines (real data)
 
-Four models are available over the comma2k19 dataset:
+Models are composed from three Hydra groups — `encoder`, `temporal`, `head` —
+selected on the CLI (no file per combination).
 
-| Model | Encoder | Temporal | `preprocessing.image_size` |
-| --- | --- | --- | --- |
-| `cnn_lstm` | tiny from-scratch CNN | LSTM | `[64, 64]` |
-| `resnet_lstm` | frozen pretrained ResNet18 (global pool) | LSTM | `[128, 128]` |
-| `resnet_convlstm` | frozen pretrained ResNet18 (spatial map) | ConvLSTM | `[128, 128]` |
-| `vit_lstm` | frozen ImageNet ViT-B/16 (CLS token) | LSTM | `[224, 224]` |
+- `encoder=` `tiny_cnn`, `resnet18`, `resnet50`, `mobilenet_v3_small`, `efficientnet_b0`, `vit_b_16`
+- `temporal=` `gru`, `lstm`, `convlstm`
+- `head=` `linear`, `mlp`
+
+| Baseline | `preprocessing.image_size` |
+| --- | --- |
+| `encoder=tiny_cnn temporal=lstm` | `[64, 64]` |
+| `encoder=resnet18 temporal=lstm` | `[128, 128]` |
+| `encoder=resnet18 temporal=convlstm` | `[128, 128]` |
+| `encoder=vit_b_16 temporal=lstm` | `[224, 224]` |
 
 Workflow:
 
@@ -57,10 +62,10 @@ python scripts/preprocess.py dataset=comma2k19
 python scripts/inspect_data.py dataset=comma2k19
 
 # 3. Train a baseline (add data.window_stride=1 for full overlap; default is 5).
-python scripts/train.py dataset=comma2k19 model=cnn_lstm preprocessing.image_size=[64,64]
-python scripts/train.py dataset=comma2k19 model=resnet_lstm preprocessing.image_size=[128,128]
-python scripts/train.py dataset=comma2k19 model=resnet_convlstm preprocessing.image_size=[128,128]
-python scripts/train.py dataset=comma2k19 model=vit_lstm preprocessing.image_size=[224,224]
+python scripts/train.py dataset=comma2k19 encoder=tiny_cnn temporal=lstm preprocessing.image_size=[64,64]
+python scripts/train.py dataset=comma2k19 encoder=resnet18 temporal=lstm preprocessing.image_size=[128,128]
+python scripts/train.py dataset=comma2k19 encoder=resnet18 temporal=convlstm preprocessing.image_size=[128,128]
+python scripts/train.py dataset=comma2k19 encoder=vit_b_16 temporal=lstm preprocessing.image_size=[224,224]
 ```
 
 Notes:
@@ -70,9 +75,13 @@ Notes:
 - `data.window_stride` applies to training only; validation/test are always
   stride 1 (required by the frame-aligned metrics and stationary detector).
 - ResNet/ViT weights download once (ImageNet) and are cached by torchvision; point
-  `encoder.weights_path` at a local `.pth` to run offline.
-- `vit_lstm` uses a frozen ViT-B/16 at 224×224 (CLS token); it is ~5–10× heavier
-  per frame than ResNet18. `model.encoder.variant=vit_b_32` is the cheaper fallback.
+  `model.encoder.weights_path` at a local `.pth` to run offline.
+- `vit_b_16` uses a frozen ViT-B/16 at 224×224 (CLS token); it is ~5–10× heavier
+  per frame than ResNet18. `encoder=vit_b_32` is the cheaper fallback.
+- The regression head is `head=linear` (single layer) or `head=mlp`; tune it via
+  `head.hidden_dims=[...]`, `head.activation=relu|gelu|tanh|...`, `head.dropout=0.1`.
+- `convlstm` needs a spatial-capable encoder (`resnet18`); `feature_dim` defaults to
+  512. Use `model.encoder.feature_dim=32` for a lighter ConvLSTM.
 - Each run exports a standalone `model.pt` (no Lightning wrapper) alongside the
   Lightning checkpoints.
 - Evaluation/inference device is `evaluation.device` (default `auto` -> GPU when
@@ -81,14 +90,17 @@ Notes:
 ## Configuration
 
 Configuration is Hydra-based. `configs/default.yaml` is the root; `dataset`,
-`model`, and `experiment` are config groups. Downstream code receives typed
-dataclasses (`src.config.Config`) — never raw dicts.
+`encoder`, `temporal`, `head`, and `experiment` are config groups. Downstream code
+receives typed dataclasses (`src.config.Config`) — never raw dicts.
 
 - `dataset=synthetic` — synthetic data parameters.
-- `model=tiny_cnn_gru` — model architecture.
+- `encoder=resnet18|resnet50|vit_b_16|...` — spatial encoder.
+- `temporal=lstm|gru|convlstm` — temporal aggregator.
+- `head=linear|mlp` — regression head.
 - `experiment=baseline|smoke` — run presets.
 
-Overrides use dot paths, e.g. `postprocessing.stationary.enter_threshold_mph=1.5`.
+Overrides use dot paths, e.g. `postprocessing.stationary.enter_threshold_mph=1.5`,
+or `model.encoder.feature_dim=32`.
 
 See [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md) for the full configuration guide.
 

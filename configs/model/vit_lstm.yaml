@@ -1,4 +1,0 @@
-name: vit_lstm
-encoder: {name: vit, variant: vit_b_16, pretrained: true, feature_dim: 768, frozen: true, weights_path: null, image_size: 224}
-temporal: {name: lstm, hidden_size: 64, num_layers: 1}
-checkpoint: null

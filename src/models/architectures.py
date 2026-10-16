@@ -263,6 +263,43 @@ class ConvLSTM(nn.Module):
         return h
 
 
+_ACTIVATIONS: dict[str, type[nn.Module]] = {
+    "none": nn.Identity,
+    "relu": nn.ReLU,
+    "gelu": nn.GELU,
+    "leaky_relu": nn.LeakyReLU,
+    "tanh": nn.Tanh,
+    "sigmoid": nn.Sigmoid,
+}
+
+# Encoders that support a spatial stem (feed a ConvLSTM); the rest are vector-only.
+_SPATIAL_ENCODERS = {"backbone", "resnet18"}
+
+
+def _build_head(input_dim: int, head: dict) -> nn.Module:
+    """Build the regression head from a config dict.
+
+    ``head.hidden_dims`` is the list of intermediate layer widths (empty => a
+    single ``Linear(input_dim, 1)``). ``head.activation`` and ``head.dropout``
+    are applied after each hidden layer, never after the final scalar output.
+    """
+    hidden_dims = [int(d) for d in head.get("hidden_dims", []) or []]
+    activation = head.get("activation", "none")
+    dropout = float(head.get("dropout", 0.0))
+    if activation not in _ACTIVATIONS:
+        raise ConfigError(f"Unknown head activation {activation!r}. Valid: {sorted(_ACTIVATIONS)}")
+    dims = [input_dim, *hidden_dims, 1]
+    layers: list[nn.Module] = []
+    for i in range(len(dims) - 1):
+        layers.append(nn.Linear(dims[i], dims[i + 1]))
+        if i < len(dims) - 2:  # hidden layer, not the final scalar output
+            if dropout > 0.0:
+                layers.append(nn.Dropout(dropout))
+            if activation != "none":
+                layers.append(_ACTIVATIONS[activation]())
+    return nn.Sequential(*layers)
+
+
 class EncoderRecurrent(BaseSpeedModel):
     """Generic encoder -> per-frame features -> recurrent temporal -> head.
 
@@ -271,11 +308,9 @@ class EncoderRecurrent(BaseSpeedModel):
     ``forward`` dispatches on the number of dimensions of the encoder output.
     """
 
-    def __init__(self, encoder: dict, temporal: dict):
+    def __init__(self, encoder: dict, temporal: dict, head: dict | None = None):
         super().__init__()
-        feature_dim = int(encoder.get("feature_dim", 64))
-        hidden_size = int(temporal.get("hidden_size", 32))
-
+        head = head or {}
         encoder_name = encoder.get("name", "tiny_cnn")
         if encoder_name not in ENCODER_REGISTRY:
             raise ConfigError(f"Unknown encoder {encoder_name!r}")
@@ -283,13 +318,23 @@ class EncoderRecurrent(BaseSpeedModel):
         if temporal_name not in TEMPORAL_REGISTRY:
             raise ConfigError(f"Unknown temporal module {temporal_name!r}")
 
-        self.encoder = ENCODER_REGISTRY[encoder_name](
-            **{k: v for k, v in encoder.items() if k != "name"}
-        )
+        # Spatial mode belongs to the temporal module: ConvLSTM consumes a spatial
+        # map, LSTM/GRU consume a per-frame vector.
+        spatial = temporal_name == "convlstm"
+        encoder_kwargs = {k: v for k, v in encoder.items() if k != "name"}
+        if encoder_name in _SPATIAL_ENCODERS:
+            encoder_kwargs["spatial"] = spatial
+        elif spatial:
+            raise ConfigError(f"encoder {encoder_name!r} is vector-only and cannot feed a ConvLSTM")
+
+        feature_dim = int(encoder.get("feature_dim", 64))
+        hidden_size = int(temporal.get("hidden_size", 32))
+
+        self.encoder = ENCODER_REGISTRY[encoder_name](**encoder_kwargs)
         tmp_kwargs = {k: v for k, v in temporal.items() if k != "name"}
         tmp_kwargs["input_dim"] = feature_dim
         self.temporal = TEMPORAL_REGISTRY[temporal_name](**tmp_kwargs)
-        self.head = nn.Linear(hidden_size, 1)
+        self.head = _build_head(hidden_size, head)
 
     def forward(self, frames: Tensor) -> Tensor:  # frames: [B, T, C, H, W]
         b, t, c, h, w = frames.shape
@@ -315,22 +360,10 @@ TEMPORAL_REGISTRY: dict[str, type[nn.Module]] = {
     "convlstm": ConvLSTM,
 }
 
-MODEL_REGISTRY: dict[str, type[BaseSpeedModel]] = {
-    "tiny_cnn_gru": EncoderRecurrent,
-    "cnn_lstm": EncoderRecurrent,
-    "resnet_lstm": EncoderRecurrent,
-    "resnet_convlstm": EncoderRecurrent,
-    "mobilenet_lstm": EncoderRecurrent,
-    "efficientnet_lstm": EncoderRecurrent,
-    "vit_lstm": EncoderRecurrent,
-}
-
 
 def build_model(cfg: ModelCfg) -> BaseSpeedModel:
-    """Build a model from typed config; unknown name raises :class:`ConfigError`."""
-    if cfg.name not in MODEL_REGISTRY:
-        raise ConfigError(f"Unknown model {cfg.name!r}. Valid models: {sorted(MODEL_REGISTRY)}")
-    return MODEL_REGISTRY[cfg.name](encoder=cfg.encoder, temporal=cfg.temporal)
+    """Compose an :class:`EncoderRecurrent` from ``encoder``/``temporal``/``head``."""
+    return EncoderRecurrent(encoder=cfg.encoder, temporal=cfg.temporal, head=cfg.head)
 
 
 def count_parameters(model: nn.Module) -> int:

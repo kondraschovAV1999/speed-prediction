@@ -1,4 +1,0 @@
-name: cnn_lstm
-encoder: {name: tiny_cnn, pretrained: false, feature_dim: 64}
-temporal: {name: lstm, hidden_size: 32, num_layers: 1}
-checkpoint: null

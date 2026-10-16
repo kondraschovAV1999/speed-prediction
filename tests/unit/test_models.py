@@ -47,9 +47,31 @@ def test_output_shape_b4():
     assert torch.isfinite(out).all()
 
 
-def test_unknown_model_name_raises():
+def test_mlp_head_shape():
+    cfg = make_model_cfg()
+    cfg.head = {"hidden_dims": [32, 16], "activation": "relu", "dropout": 0.1}
+    model = build_model(cfg)
+    out = model(torch.randn(2, 5, 3, 32, 32))
+    assert out.shape == (2,)
+    assert torch.isfinite(out).all()
+    # MLP head: more than the single Linear of the default `linear` head
+    assert len(list(model.head)) > 1
+
+
+def test_convlstm_with_vector_encoder_raises():
+    cfg = ModelCfg(
+        encoder={"name": "vit", "variant": "vit_b_16", "pretrained": False, "feature_dim": 768},
+        temporal={"name": "convlstm", "hidden_size": 32, "kernel_size": 3, "num_layers": 1},
+    )
     with pytest.raises(ConfigError):
-        build_model(ModelCfg(name="nope", encoder={}, temporal={}))
+        build_model(cfg)
+
+
+def test_unknown_head_activation_raises():
+    cfg = make_model_cfg()
+    cfg.head = {"hidden_dims": [16], "activation": "swish", "dropout": 0.0}
+    with pytest.raises(ConfigError):
+        build_model(cfg)
 
 
 def test_unknown_encoder_raises():
@@ -80,6 +102,30 @@ def test_resnet_lstm_frozen_shape_and_trainable():
     backbone_trainable = [p for p in model.encoder.backbone.parameters() if p.requires_grad]
     assert len(backbone_trainable) == 0
     # temporal + head still trainable, but fewer trainable than total params
+    assert count_parameters(model) > 0
+    assert count_parameters(model) < sum(p.numel() for p in model.parameters())
+
+
+def test_resnet50_lstm_shape_and_frozen():
+    cfg = ModelCfg(
+        name="resnet50_lstm",
+        encoder={
+            "name": "backbone",
+            "backbone": "resnet50",
+            "pretrained": False,
+            "feature_dim": 2048,
+            "frozen": True,
+            "spatial": False,
+        },
+        temporal={"name": "lstm", "hidden_size": 64, "num_layers": 1},
+        checkpoint=None,
+    )
+    model = build_model(cfg)
+    out = model(torch.randn(2, 3, 3, 128, 128))
+    assert out.shape == (2,)
+    assert torch.isfinite(out).all()
+    # frozen backbone: zero trainable params inside the backbone
+    assert len([p for p in model.encoder.backbone.parameters() if p.requires_grad]) == 0
     assert count_parameters(model) > 0
     assert count_parameters(model) < sum(p.numel() for p in model.parameters())
 
@@ -122,7 +168,6 @@ def test_resnet_convlstm_spatial_shape_and_frozen():
             "pretrained": False,
             "feature_dim": 32,
             "frozen": True,
-            "spatial": True,
         },
         temporal={"name": "convlstm", "hidden_size": 32, "kernel_size": 3, "num_layers": 1},
         checkpoint=None,

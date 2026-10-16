@@ -1,4 +1,0 @@
-name: tiny_cnn_gru
-encoder: {name: tiny_cnn, pretrained: false, feature_dim: 64}
-temporal: {name: gru, hidden_size: 32, num_layers: 1}
-checkpoint: null
