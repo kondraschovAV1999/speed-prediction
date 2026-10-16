@@ -10,6 +10,7 @@ from torch import Tensor
 
 from src.core.config import ModelCfg
 from src.core.schemas import ConfigError
+from src.models.convlstm import ConvLSTM as _ConvLSTMImpl
 
 
 class BaseSpeedModel(nn.Module):
@@ -230,38 +231,35 @@ class LSTMTemporal(nn.Module):
         return out[:, -1, :]  # [B, hidden_size]
 
 
-class ConvLSTMCell(nn.Module):
-    """Single ConvLSTM cell (Shi et al. 2015): one gate convolution over [x, h]."""
-
-    def __init__(self, input_dim: int, hidden_dim: int, kernel_size: int = 3):
-        super().__init__()
-        pad = kernel_size // 2
-        self.conv = nn.Conv2d(input_dim + hidden_dim, 4 * hidden_dim, kernel_size, padding=pad)
-
-    def forward(self, x: Tensor, state: tuple[Tensor, Tensor]) -> tuple[Tensor, Tensor]:
-        h, c = state
-        i, f, g, o = self.conv(torch.cat([x, h], dim=1)).chunk(4, dim=1)
-        i, f, g, o = torch.sigmoid(i), torch.sigmoid(f), torch.tanh(g), torch.sigmoid(o)
-        c_next = f * c + i * g
-        return o * torch.tanh(c_next), c_next
-
-
 class ConvLSTM(nn.Module):
-    """Spatially recurrent ConvLSTM (single layer), batch-first [B, T, C, H, W]."""
+    """ConvLSTM temporal module (Shi et al. 2015, with peephole connections).
 
-    def __init__(self, input_dim: int, hidden_size: int, kernel_size: int = 3, num_layers: int = 1):
+    Thin adapter over the vendored KL4805 reference implementation
+    (``src/models/convlstm.py``), presenting the pipeline's batch-first
+    ``[B, T, C, H, W] -> [B, hidden_size, H, W]`` interface. Converts the
+    config's scalar ``kernel_size`` to the tuple the reference expects.
+    """
+
+    def __init__(
+        self, input_dim: int, hidden_size: int = 32, kernel_size: int = 3, num_layers: int = 1
+    ):
         super().__init__()
         if num_layers != 1:
             raise ConfigError("ConvLSTM num_layers must be 1 (stacking is future work)")
-        self.cell = ConvLSTMCell(input_dim, hidden_size, kernel_size)
-        self.hidden_size = hidden_size
+        self._impl = _ConvLSTMImpl(
+            input_dim=input_dim,
+            hidden_dim=int(hidden_size),
+            kernel_size=(int(kernel_size), int(kernel_size)),
+            num_layers=1,
+            batch_first=True,
+            bias=True,
+            return_all_layers=False,
+        )
+        self.hidden_size = int(hidden_size)
 
     def forward(self, x: Tensor) -> Tensor:  # [B, T, C, H, W] -> [B, hidden_size, H, W]
-        b, t, _, hh, ww = x.shape
-        h = torch.zeros(b, self.hidden_size, hh, ww, device=x.device)
-        c = torch.zeros_like(h)
-        for step in range(t):
-            h, c = self.cell(x[:, step], (h, c))
+        _, last_states = self._impl(x)
+        h, _ = last_states[0]  # last layer's (h, c)
         return h
 
 
