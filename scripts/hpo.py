@@ -54,6 +54,7 @@ def make_objective(base_overrides: list[str], search_space: DictConfig, epochs: 
     feature_dims = list(search_space.feature_dims)
     seq = search_space.sequence_length
     wd = search_space.weight_decay
+    strides = list(search_space.window_stride)
     head_cfg = search_space.head
 
     def objective(trial: optuna.Trial) -> float:
@@ -62,6 +63,8 @@ def make_objective(base_overrides: list[str], search_space: DictConfig, epochs: 
         sequence_length = trial.suggest_int(
             "sequence_length", int(seq.low), int(seq.high), step=int(seq.step)
         )
+        window_stride = trial.suggest_categorical("window_stride", strides)
+        window_stride = min(int(window_stride), sequence_length)  # enforce stride <= window size
         weight_decay = trial.suggest_float(
             "weight_decay", float(wd.low), float(wd.high), log=bool(wd.log)
         )
@@ -73,6 +76,7 @@ def make_objective(base_overrides: list[str], search_space: DictConfig, epochs: 
             f"encoder={encoder}",
             f"temporal={temporal}",
             f"data.sequence_length={sequence_length}",
+            f"data.window_stride={window_stride}",
             f"training.weight_decay={weight_decay}",
             f"model.encoder.feature_dim={feature_dim}",
             f"training.epochs={epochs}",
