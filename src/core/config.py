@@ -110,6 +110,7 @@ class TrainingCfg:
     accelerator: str = "auto"
     devices: int = 1
     precision: str = "32-true"
+    matmul_precision: str = "high"  # highest | high (TF32) | medium (bf16 matmul)
     num_workers: int = 0
 
 
@@ -263,6 +264,8 @@ def _validate_semantics(obj: Config) -> None:
         raise ConfigError(f"Unknown loss: {obj.training.loss!r}")
     if obj.training.huber_delta <= 0:
         raise ConfigError("training.huber_delta must be positive")
+    if obj.training.matmul_precision not in ("highest", "high", "medium"):
+        raise ConfigError(f"Unknown matmul_precision: {obj.training.matmul_precision!r}")
     if obj.data.on_duplicate_timestamp not in ("raise", "drop_later"):
         raise ConfigError(f"Unknown on_duplicate_timestamp: {obj.data.on_duplicate_timestamp!r}")
     if obj.data.sequence_length < 1:

@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 
 import numpy as np
 import pandas as pd
+import torch
 from omegaconf import DictConfig, OmegaConf
 
 from src.core.config import Config, validate_config
@@ -52,6 +53,7 @@ def run_experiment(cfg: DictConfig) -> RunPaths:
     paths = create_run(cfg)
     setup_logging(paths.log_file, level=cfg.logging.level)
     set_seed(cfg.experiment.seed, deterministic=cfg.experiment.deterministic)
+    torch.set_float32_matmul_precision(cfg.training.matmul_precision)
 
     write_metadata(
         paths,
@@ -91,15 +93,14 @@ def run_experiment(cfg: DictConfig) -> RunPaths:
         results: dict = {}
         predictions: dict[str, pd.DataFrame] = {}
         eval_splits = list(cfg.evaluation.splits_to_evaluate)
-        for split_name in ("train", *eval_splits):
+        for split_name in eval_splits:
             logger.info("event=evaluate_split_start split=%s", split_name)
             raw_df = collect_raw_predictions(
                 loaded_model, loaders[split_name], cfg.evaluation.device, split_name
             )
             final_df = postprocess_dataframe(raw_df, cfg.postprocessing)
             predictions[split_name] = final_df
-            if split_name in eval_splits:
-                results[split_name] = evaluate_predictions(final_df, cfg.evaluation, split_name)
+            results[split_name] = evaluate_predictions(final_df, cfg.evaluation, split_name)
             logger.info("event=evaluate_split_complete split=%s n=%d", split_name, len(final_df))
 
         predictions_df = pd.concat(

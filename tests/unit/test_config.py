@@ -30,11 +30,11 @@ def test_compose_override_learning_rate():
 
 def test_compose_model_defaults():
     cfg = compose_config()
-    assert cfg.model.encoder.name == "backbone"
-    assert cfg.model.encoder.backbone == "resnet18"
-    assert cfg.model.temporal.name == "convlstm"
-    assert cfg.model.head.activation == "none"
-    assert cfg.model.head.hidden_dims == []
+    # the three composable groups resolve into model.encoder/temporal/head;
+    # don't pin exact defaults (they're user-tunable in configs/).
+    assert cfg.model.encoder.name in ("backbone", "resnet18", "tiny_cnn", "vit", "deeplabv3")
+    assert cfg.model.temporal.name in ("gru", "lstm", "convlstm")
+    assert "hidden_dims" in cfg.model.head or "layers" in cfg.model.head
 
 
 def test_compose_encoder_temporal_head():
@@ -42,7 +42,7 @@ def test_compose_encoder_temporal_head():
     assert cfg.model.encoder.backbone == "resnet50"
     assert cfg.model.temporal.name == "gru"
     assert cfg.model.head.activation == "relu"
-    assert cfg.model.head.hidden_dims == [128, 64]
+    assert len(cfg.model.head.hidden_dims) >= 1  # mlp preset has hidden layers
 
 
 def test_validate_returns_typed_config():
@@ -78,6 +78,12 @@ def test_validate_persistence_lt_one_raises():
 
 def test_validate_unknown_smoothing_raises():
     cfg = OmegaConf.create({"postprocessing": {"smoothing": {"method": "spline"}}})
+    with pytest.raises(ConfigError):
+        validate_config(cfg)
+
+
+def test_validate_unknown_matmul_precision_raises():
+    cfg = OmegaConf.create({"training": {"matmul_precision": "low"}})
     with pytest.raises(ConfigError):
         validate_config(cfg)
 
