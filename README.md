@@ -34,6 +34,7 @@ python scripts/train.py training.learning_rate=0.001   # override any key
 | `python scripts/evaluate.py run=<name>` | Re-run evaluation from a saved checkpoint |
 | `python scripts/predict.py model.checkpoint=<path> input=<dir>` | Stream predictions over a frame folder |
 | `python scripts/visualize.py run=<name>` | Regenerate figures from a run's `predictions.csv` |
+| `python scripts/hpo.py` | Directed hyperparameter search (Optuna TPE) |
 
 ## comma2k19 baselines (real data)
 
@@ -79,7 +80,8 @@ Notes:
 - `vit_b_16` uses a frozen ViT-B/16 at 224×224 (CLS token); it is ~5–10× heavier
   per frame than ResNet18. `encoder=vit_b_32` is the cheaper fallback.
 - The regression head is `head=linear` (single layer) or `head=mlp`; tune it via
-  `head.hidden_dims=[...]`, `head.activation=relu|gelu|tanh|...`, `head.dropout=0.1`.
+  `head.hidden_dims=[...]`, `head.activation=relu|gelu|tanh|...`, `head.dropout=0.1`,
+  or per-layer `head.layers=[{units, activation, dropout}, ...]`.
 - `convlstm` needs a spatial-capable encoder (`resnet18`); `feature_dim` defaults to
   512. Use `model.encoder.feature_dim=32` for a lighter ConvLSTM.
 - Each run exports a standalone `model.pt` (no Lightning wrapper) alongside the
@@ -103,6 +105,21 @@ Overrides use dot paths, e.g. `postprocessing.stationary.enter_threshold_mph=1.5
 or `model.encoder.feature_dim=32`.
 
 See [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md) for the full configuration guide.
+
+## Hyperparameter search
+
+Directed search (Optuna **TPE**) over encoder / temporal / window / head, with the
+search space defined in `configs/hpo.yaml` (not hard-coded):
+
+```bash
+pip install -e ".[hpo]"     # install the optuna extra (once)
+python scripts/hpo.py       # minimize val/rmse; budget from configs/hpo.yaml
+python scripts/hpo.py --trials 20 --epochs 25
+```
+
+- Objective = `val/rmse`; `training.monitor` is aligned to `val/rmse_mph`.
+- Results: `output/hpo_trials.csv` + every trial in MLflow; best params printed.
+- The head is swept per-layer via `head.layers=[{units, activation, dropout}, ...]`.
 
 ## Output contract
 

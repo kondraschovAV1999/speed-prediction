@@ -301,6 +301,16 @@ head.hidden_dims=[32,16,32] head.activation=gelu head.dropout=0.2
 
 `head.activation` accepts `none|relu|gelu|leaky_relu|tanh|sigmoid`.
 
+For **per-layer** control (different width/activation/dropout per hidden layer),
+use the `head.layers` list form, which takes precedence over the compact form:
+
+```yaml
+head:
+  layers:
+    - {units: 128, activation: relu, dropout: 0.1}
+    - {units: 64,  activation: gelu, dropout: 0.2}
+```
+
 **Note on resolution:** the cache is stored at `comma2k19.cache_image_size`
 (default 128×128). `preprocessing.image_size` resizes at load time, so the model
 input can be ≤ the cache size without re-preprocessing. For native 224×224 input
@@ -361,3 +371,31 @@ plus `output/logs/<name>.log` and figures under `output/figures/<name>/`.
   local `.pth` (or run once online so torchvision caches it).
 - **Slow preprocessing** — it's decoding H.265; reduce work with
   `data.comma2k19.max_segments=N` or `data.comma2k19.cache_image_size=[64,64]`.
+
+---
+
+## 8. Hyperparameter search (Optuna TPE)
+
+Directed search over encoder / temporal / window / head. The search space is in
+`configs/hpo.yaml` (not hard-coded); the objective is `val/rmse`.
+
+```bash
+pip install -e ".[hpo]"        # install the optuna extra (once)
+python scripts/hpo.py          # budget from configs/hpo.yaml
+python scripts/hpo.py --trials 20 --epochs 25
+python scripts/hpo.py --trials 2 dataset=synthetic experiment=smoke model.encoder.pretrained=false
+```
+
+`configs/hpo.yaml` keys:
+
+| key | meaning |
+| --- | --- |
+| `budget.{n_trials, epochs, seed, study_name}` | study budget (CLI-overridable) |
+| `search_space.encoders` / `temporals` | categorical options |
+| `search_space.feature_dims` | one shared list (Optuna needs a fixed categorical) |
+| `search_space.sequence_length` / `window_stride` | window size + training stride (`stride` clipped to `<= sequence_length`) |
+| `search_space.weight_decay` | log-uniform range |
+| `search_space.head.{depth, units, dropout, activations}` | per-layer MLP head search |
+
+Results: `output/hpo_trials.csv` + every trial in MLflow; the best `val/rmse` and
+params are printed at the end.

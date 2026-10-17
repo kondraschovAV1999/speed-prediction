@@ -62,3 +62,14 @@
 | D-F-4 | `MODEL_REGISTRY` removed; `build_model` always builds `EncoderRecurrent` |
 | D-F-5 | `model.name` is a label (default `encoder_recurrent`) |
 | D-F-6 | Encoder files use native `feature_dim`; override for lighter heads |
+
+## HPO / directed search (2026-10-16 design)
+
+| ID | Decision |
+| --- | --- |
+| D-H-1 | Optuna TPE (`optuna` `hpo` extra); objective = minimize `val/rmse` (not test — avoids leakage) |
+| D-H-2 | Search space lives in `configs/hpo.yaml` (not hard-coded); budget CLI-overridable |
+| D-H-3 | `feature_dim` is one shared categorical list (Optuna requires fixed choices; conditional per-encoder sets rejected) |
+| D-H-4 | `window_stride` swept and clipped to `<= sequence_length` |
+| D-H-5 | Head swept per-layer (depth 1-3 + per-layer units/activation/dropout) via `head.layers` |
+| D-H-6 | Per-trial `training.epochs` cap (25) + early stopping; monitor aligned to `val/rmse_mph` |
