@@ -1,0 +1,25 @@
+# Directed hyperparameter search space (Optuna TPE).
+# Objective: minimize `val/rmse`. Loaded by scripts/hpo.py.
+
+budget:
+  n_trials: 40          # number of Optuna trials
+  epochs: 25            # max epochs per trial (early stopping applies)
+  seed: 42
+  study_name: null      # optional Optuna study name (for persistent storage)
+
+search_space:
+  encoders: [resnet18, resnet50, mobilenet_v3_small, efficientnet_b0]
+  temporals: [lstm, gru, convlstm]
+
+  # feature_dim (encoder output width) — one shared list so Optuna treats it as a
+  # single fixed categorical. Keep values small enough that the convlstm path stays sane.
+  feature_dims: [32, 64, 128, 256, 512]
+
+  sequence_length: {low: 5, high: 25, step: 5}
+  weight_decay: {low: 1e-5, high: 1e-2, log: true}
+
+  head:
+    depth: {low: 1, high: 3}
+    units: {low: 16, high: 256, log: true}
+    dropout: {low: 0.0, high: 0.5}
+    activations: [relu, gelu, tanh]

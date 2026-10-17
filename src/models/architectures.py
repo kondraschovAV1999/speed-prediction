@@ -343,25 +343,51 @@ _SPATIAL_ENCODERS = {"backbone", "resnet18", "deeplabv3"}
 def _build_head(input_dim: int, head: dict) -> nn.Module:
     """Build the regression head from a config dict.
 
-    ``head.hidden_dims`` is the list of intermediate layer widths (empty => a
-    single ``Linear(input_dim, 1)``). ``head.activation`` and ``head.dropout``
-    are applied after each hidden layer, never after the final scalar output.
+    Two forms are supported:
+
+    * ``head.layers`` (list of dicts) — explicit per-layer config; each entry may
+      set ``units`` (width), ``activation``, and ``dropout``.
+    * ``head.hidden_dims`` + global ``head.activation`` / ``head.dropout`` — the
+      compact form (empty ``hidden_dims`` => a single ``Linear(input_dim, 1)``).
+
+    Activation/dropout are applied after each hidden layer, never after the
+    final scalar output.
     """
+    layers_cfg = head.get("layers") or []
+    if layers_cfg:
+        dims = [input_dim, *[int(layer_cfg.get("units", input_dim)) for layer_cfg in layers_cfg], 1]
+        modules: list[nn.Module] = []
+        for i in range(len(dims) - 1):
+            modules.append(nn.Linear(dims[i], dims[i + 1]))
+            if i < len(dims) - 2:  # hidden layer, not the final scalar output
+                layer = layers_cfg[i]
+                activation = layer.get("activation", "none")
+                dropout = float(layer.get("dropout", 0.0))
+                if activation not in _ACTIVATIONS:
+                    raise ConfigError(
+                        f"Unknown head activation {activation!r}. Valid: {sorted(_ACTIVATIONS)}"
+                    )
+                if dropout > 0.0:
+                    modules.append(nn.Dropout(dropout))
+                if activation != "none":
+                    modules.append(_ACTIVATIONS[activation]())
+        return nn.Sequential(*modules)
+
     hidden_dims = [int(d) for d in head.get("hidden_dims", []) or []]
     activation = head.get("activation", "none")
     dropout = float(head.get("dropout", 0.0))
     if activation not in _ACTIVATIONS:
         raise ConfigError(f"Unknown head activation {activation!r}. Valid: {sorted(_ACTIVATIONS)}")
     dims = [input_dim, *hidden_dims, 1]
-    layers: list[nn.Module] = []
+    modules: list[nn.Module] = []
     for i in range(len(dims) - 1):
-        layers.append(nn.Linear(dims[i], dims[i + 1]))
+        modules.append(nn.Linear(dims[i], dims[i + 1]))
         if i < len(dims) - 2:  # hidden layer, not the final scalar output
             if dropout > 0.0:
-                layers.append(nn.Dropout(dropout))
+                modules.append(nn.Dropout(dropout))
             if activation != "none":
-                layers.append(_ACTIVATIONS[activation]())
-    return nn.Sequential(*layers)
+                modules.append(_ACTIVATIONS[activation]())
+    return nn.Sequential(*modules)
 
 
 class EncoderRecurrent(BaseSpeedModel):

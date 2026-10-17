@@ -58,6 +58,22 @@ def test_mlp_head_shape():
     assert len(list(model.head)) > 1
 
 
+def test_head_layers_per_layer_config():
+    cfg = make_model_cfg()
+    cfg.head = {
+        "layers": [
+            {"units": 128, "activation": "relu", "dropout": 0.1},
+            {"units": 64, "activation": "gelu", "dropout": 0.0},
+        ]
+    }
+    model = build_model(cfg)
+    out = model(torch.randn(2, 5, 3, 32, 32))
+    assert out.shape == (2,)
+    assert torch.isfinite(out).all()
+    # Linear -> ReLU -> Dropout -> Linear -> GELU -> Linear  (dropout 0.0 skipped)
+    assert len(list(model.head)) == 6
+
+
 def test_convlstm_with_vector_encoder_raises():
     cfg = ModelCfg(
         encoder={"name": "vit", "backbone": "vit_b_16", "pretrained": False, "feature_dim": 768},

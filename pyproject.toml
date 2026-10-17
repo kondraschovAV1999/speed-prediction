@@ -26,6 +26,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["pytest", "pytest-cov", "ruff", "mypy"]
 video = ["opencv-python"]
+hpo = ["optuna>=3.0"]
 
 [tool.setuptools.packages.find]
 include = ["src*"]
