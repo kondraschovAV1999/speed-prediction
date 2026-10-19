@@ -335,8 +335,9 @@ raw mph → clip (min 0) → smoothing (none|ema|median) → stationary detector
 
 The **stationary detector** is a hysteresis state machine: `≤ enter_threshold`
 (2.0 mph) for `enter_persistence_frames` consecutive frames → STOPPED; `>
-exit_threshold` (2.5) for N frames → MOVING. When stationary, `final_speed_mph`
-is exactly `0.0`. It's causal and `reset()` at each sequence boundary.
+exit_threshold` (2.5) for N frames → MOVING. It emits an independent
+`stationary_pred` flag and no longer zeroes `final_speed_mph`. It's causal and
+`reset()` at each sequence boundary.
 
 **Metrics** (on the final predictions): regression MAE/RMSE/R²/Median-AE (overall +
 per-bucket), plus stationary precision/recall/F1 + confusion counts. Full results

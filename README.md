@@ -3,8 +3,8 @@
 Vehicle speed estimation from video frames: a complete, tested, CPU-runnable
 vertical slice on **synthetic data** (M1). A tiny CNN+GRU regresses per-frame
 speed (mph) from a sliding window of frames; a causal post-processing stage
-(clip → smoothing → hysteresis stationary detector) turns raw predictions into
-a deployable streaming estimator.
+(clip → smoothing) produces the speed estimate, while a hysteresis detector
+emits an independent moving/stationary flag (`stationary_pred`).
 
 ## Install
 

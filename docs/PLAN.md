@@ -91,7 +91,7 @@ Record answers in `docs/DECISIONS.md` (template in §9.5). Agents must **never i
 15. Separation: model ≠ Lightning wrapper; post-processing ≠ model; stationary detection ≠ regression; evaluation ≠ training; visualization ≠ evaluation logic.
 16. Interfaces only where ≥2 implementations are expected (model, tracker, smoothing, frame source). No other abstractions.
 17. Document assumptions/unresolved dataset decisions instead of inventing them.
-18. Final output when stationary is exactly the float literal `0.0` (never `-0.0`, never `1e-9`).
+18. `final_speed_mph` is the clipped/smoothed prediction and is never zeroed by the stationary detector; `stationary_pred` is an independent boolean output (normalize `-0.0` to `0.0`, never emit `-0.0`).
 
 **Units & types:** speeds in **mph** (`float`); timestamps in **seconds** (`float`); images `uint8` HWC at I/O boundaries, `float32` CHW inside tensors.
 
@@ -374,7 +374,7 @@ class SpeedPrediction:        # streaming-inference output (one per new frame on
     frame_index: int          # index of the window's LAST frame within the sequence
     timestamp: float
     raw_speed_mph: float      # model output, before any post-processing
-    final_speed_mph: float    # exactly 0.0 when stationary
+    final_speed_mph: float    # clipped + smoothed prediction; independent of `stationary`
     stationary: bool
     inference_ms: float       # NaN if not measured
 
@@ -517,10 +517,10 @@ Pipeline per frame: `raw → clip (if enabled) → smoothing (if any) → statio
   - Counters reset whenever the condition breaks; both counters reset on a state change.
   - Boundary rule: `== enter_threshold` counts as low (`<=`); `== exit_threshold` does **not** count as high (strict `>`).
   - Constraint (validated): `enter_threshold_mph <= exit_threshold_mph`, persistence frames `>= 1`.
-- `final_speed_mph = 0.0` (float literal) if stationary else the smoothed/clipped value. Normalize `-0.0` to `0.0`.
+- `final_speed_mph` is the smoothed/clipped value; it is never zeroed by the detector. `stationary_pred` is an independent boolean. Normalize `-0.0` to `0.0`.
 - If `stationary.enabled` is false: `stationary_pred = False` everywhere and a WARNING says stationary metrics are not meaningful.
 - NaN/inf raw input → raise `ValueError` (fail loudly; do not guess).
-- Known trade-off (document in README): persistence delays zeroing by `N-1` frames when stopping, which lowers stationary recall at transitions. Phase 5 compares configurations on **val**.
+- Known trade-off (document in README): persistence delays the `stationary_pred` flag by `N-1` frames when stopping, which lowers stationary recall at transitions. Phase 5 compares configurations on **val**.
 
 Reference test vector (enter=2.0, N=3, exit=2.5, M=3, smoothing none, clip off):
 
@@ -705,7 +705,7 @@ Every WP ends with: run its **Verify** commands and submit the handoff report (�
 
 **Owns:** `src/postprocessing.py`, `tests/unit/test_postprocessing.py`.
 **Do:** exactly §6.1. `process_sequence` **must be implemented as `reset()` + loop of `step()`** (same code path as streaming). `postprocess_dataframe(df, cfg)` groups by `sequence_id`, orders by `frame_index`, resets between sequences, adds `final_speed_mph`, `stationary_pred`; asserts stride-1 consecutive frames within each sequence (else raises `ValueError`).
-**Tests:** all §6.1 vectors; boundary values (2.0, 2.5); clip on/off with negative and huge values; EMA and median numerical examples (hand-computed); NaN raises; `final == 0.0` and `not np.signbit` when stationary; state reset between sequences (second sequence starts in `initial_state`); `process_sequence` equals manual `step` loop; disabled detector ⇒ all False; parameter validation (`enter > exit` raises).
+**Tests:** all §6.1 vectors; boundary values (2.0, 2.5); clip on/off with negative and huge values; EMA and median numerical examples (hand-computed); NaN raises; `stationary_pred` independent of `final_speed_mph`; `-0.0` normalized to `0.0`; state reset between sequences (second sequence starts in `initial_state`); `process_sequence` equals manual `step` loop; disabled detector ⇒ all False; parameter validation (`enter > exit` raises).
 **Verify:** `pytest tests/unit/test_postprocessing.py -q`
 **Must not:** import torch.
 
@@ -719,7 +719,7 @@ Every WP ends with: run its **Verify** commands and submit the handoff report (�
 ### WP7 — Reporting and visualization
 
 **Owns:** `src/reporting.py`, `src/visualization.py`, `tests/unit/test_reporting.py`, `tests/unit/test_visualization.py`.
-**Do:** §5.5/§5.6. `write_metrics_json` emits `schema_version: 1` JSON (NaN → null; `allow_nan=False`). `write_predictions_csv` keeps the §5.4 column order and writes stationary finals as `0.0`. Figures: `Agg` backend; one function per figure; filenames exactly as §5.6; figure closed after saving (`plt.close`); handles empty buckets and single-class stationary data without crashing.
+**Do:** §5.5/§5.6. `write_metrics_json` emits `schema_version: 1` JSON (NaN → null; `allow_nan=False`). `write_predictions_csv` keeps the §5.4 column order and normalizes `-0.0` to `0.0`. Figures: `Agg` backend; one function per figure; filenames exactly as §5.6; figure closed after saving (`plt.close`); handles empty buckets and single-class stationary data without crashing.
 **Tests:** JSON round-trip and schema keys; CSV round-trip equality (dtypes, column order); no `-0.0` in CSV text; each plot creates a non-empty PNG in `tmp_path`; `generate_all_figures` returns 6 paths; empty-bucket result does not raise.
 **Verify:** `pytest tests/unit/test_reporting.py tests/unit/test_visualization.py -q`
 **Must not:** compute metrics (use `EvaluationResult` values).
@@ -891,7 +891,7 @@ Do not use `venv` for the project setup. Conda is the canonical environment mana
 - [ ] `output/runs/<run>/` contains every file in §5.6; `output/logs/<run>.log` and the six figures exist and are non-empty.
 - [ ] `metadata.json` has seed, versions, git commit, status `completed`, duration, best checkpoint.
 - [ ] `metrics.json` has MAE/RMSE/R²/MedAE (overall and raw), all three buckets with `n > 0`, stationary precision/recall/F1 with counts, `model_only` and `end_to_end` latency (mean/median/P95/FPS).
-- [ ] All rows with `stationary_pred == True` have `final_speed_mph == 0.0` exactly, and no `-0.0` in `predictions.csv`.
+- [ ] `final_speed_mph` is never zeroed by the stationary detector (stationary rows keep their predicted speed); no `-0.0` in `predictions.csv`.
 - [ ] Streaming-vs-offline parity test passes.
 - [ ] No leakage: split manifest present, groups disjoint, test not used during `fit`.
 - [ ] Two runs never share a directory; a failed run is marked `failed` in metadata.

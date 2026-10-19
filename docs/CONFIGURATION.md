@@ -211,8 +211,9 @@ postprocessing:
     initial_state: moving
 ```
 
-Pipeline per frame: `raw -> clip -> smoothing -> stationary -> final`. When
-stationary, `final_speed_mph` is exactly `0.0`.
+Pipeline per frame: `raw -> clip -> smoothing -> stationary -> final`. The
+`stationary` step emits an independent `stationary_pred` flag and does not
+modify the speed value.
 
 ### 3.8 `evaluation`
 
