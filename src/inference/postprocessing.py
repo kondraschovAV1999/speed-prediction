@@ -6,7 +6,8 @@ Pipeline per frame: ``raw -> clip -> smoothing -> stationary -> final``.
 * Smoothing is causal (EMA or trailing median; no future values).
 * The stationary detector is a hysteresis state machine evaluated after
   including the current frame.
-* ``final_speed_mph`` is exactly ``0.0`` (positive zero) when stationary.
+* ``final_speed_mph`` is the clipped/smoothed value; ``stationary`` is an
+  independent boolean output and never zeroes the speed.
 """
 
 from __future__ import annotations
@@ -118,8 +119,10 @@ class SpeedPostProcessor:
         if self._detector is not None:
             stationary = self._detector.update(value)
 
-        final = 0.0 if stationary else value
-        if final == 0.0:  # also normalizes -0.0 -> 0.0
+        # Speed and stationary are independent outputs: the detector's state no
+        # longer zeroes the speed value.
+        final = value
+        if final == 0.0:  # normalize -0.0 -> 0.0 (harmless safety net)
             final = 0.0
         return PostProcessResult(final_speed_mph=final, stationary=stationary)
 

@@ -52,7 +52,7 @@ def run(speeds, cfg) -> tuple[np.ndarray, np.ndarray]:
 def test_vector_basic_enter():
     finals, flags = run([5, 1.9, 1.9, 1.9, 1.9], make_cfg())
     assert list(flags) == [False, False, False, True, True]
-    assert np.allclose(finals, [5.0, 1.9, 1.9, 0.0, 0.0])
+    assert np.allclose(finals, [5.0, 1.9, 1.9, 1.9, 1.9])
 
 
 def test_vector_enter_boundary_counts_equal_as_low():
@@ -83,14 +83,17 @@ def test_vector_exit_boundary_strict():
 
 
 # --------------------------------------------------------------------------- #
-# Stationary final value is exactly positive zero
+# Stationary flag is independent of the final speed value
 # --------------------------------------------------------------------------- #
-def test_final_is_exactly_zero_when_stationary():
+def test_stationary_flag_independent_of_final():
     finals, flags = run([5, 1.9, 1.9, 1.9, 1.9], make_cfg())
-    for i in range(5):
-        if flags[i]:
-            assert finals[i] == 0.0
-            assert not np.signbit(finals[i])
+    # flags still follow the hysteresis state machine
+    assert list(flags) == [False, False, False, True, True]
+    # but final_speed_mph is the (unclipped, unsmoothed) prediction, never zeroed
+    assert np.allclose(finals, [5.0, 1.9, 1.9, 1.9, 1.9])
+    # a stationary frame may carry a non-zero final speed
+    assert finals[3] == 1.9
+    assert bool(flags[3]) is True
 
 
 def test_negative_zero_normalized():
@@ -223,8 +226,9 @@ def test_postprocess_dataframe_adds_columns_and_order():
     assert list(out.columns) == expected
     # 1.9 for 4 consecutive frames -> stops at index 2 (N=3)
     assert list(out["stationary_pred"]) == [False, False, True, True]
-    assert out["final_speed_mph"].iloc[2] == 0.0
-    assert out["final_speed_mph"].iloc[3] == 0.0
+    # final speed keeps the predicted value, even while stationary
+    assert out["final_speed_mph"].iloc[2] == 1.9
+    assert out["final_speed_mph"].iloc[3] == 1.9
 
 
 def test_postprocess_dataframe_nonconsecutive_raises():

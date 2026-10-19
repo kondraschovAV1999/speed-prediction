@@ -69,7 +69,7 @@ class SpeedPrediction:
     frame_index: int  # index of the window's LAST frame within the sequence
     timestamp: float
     raw_speed_mph: float  # model output, before any post-processing
-    final_speed_mph: float  # exactly 0.0 when stationary
+    final_speed_mph: float  # clipped + smoothed predicted speed; independent of `stationary`
     stationary: bool
     inference_ms: float  # NaN if not measured
 
