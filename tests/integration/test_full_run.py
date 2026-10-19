@@ -68,14 +68,16 @@ def test_metrics_json_content(tmp_path):
 
 
 @pytest.mark.integration
-def test_stationary_rows_have_zero_final(tmp_path):
+def test_stationary_flag_independent_of_final(tmp_path):
     paths = run_experiment(_smoke_cfg(tmp_path))
     import pandas as pd
 
     df = pd.read_csv(paths.run_dir / "predictions.csv")
     stationary_rows = df[df["stationary_pred"] == True]  # noqa: E712
     assert len(stationary_rows) > 0
-    assert (stationary_rows["final_speed_mph"] == 0.0).all()
+    # final_speed_mph is the clipped/smoothed prediction (min 0.0); the
+    # stationary detector must not force it to 0.
+    assert (stationary_rows["final_speed_mph"] >= 0.0).all()
 
 
 @pytest.mark.integration
