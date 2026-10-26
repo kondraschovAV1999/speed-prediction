@@ -1,4 +1,6 @@
-Dashcam-Based Vehicle Speed Estimation
+# Dashcam-Based Vehicle Speed Estimation
+Project 1 for AIT 790
+
 Project overview
 This project investigates estimating a vehicle's speed in miles per hour (mph) from dashcam video. The intended system processes video frames or short frame sequences and produces a speed estimate suitable for real-time or near-real-time use.
 
@@ -42,5 +44,4 @@ Ground-truth and predicted labels are derived using the same threshold: speed <=
 - Confusion-matrix counts (true stationary, false moving, missed moving, correctly moving)
 
 
-# speed-prediction
-Project 1 for AIT 790
+
