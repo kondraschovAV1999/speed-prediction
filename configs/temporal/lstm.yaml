@@ -1,0 +1,4 @@
+# @package model.temporal
+name: lstm
+hidden_size: 32
+num_layers: 2

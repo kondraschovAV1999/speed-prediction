@@ -1,0 +1,8 @@
+# @package model.encoder
+name: vit
+backbone: vit_b_16
+pretrained: true
+feature_dim: 768
+frozen: true
+weights_path: null
+image_size: 224

@@ -1,0 +1,19 @@
+# @package data
+source: comma2k19
+root: data/raw/Chunk_1
+frame_rate_hz: 20
+split_manifest: data/splits/comma2k19_seed${experiment.seed}.json
+split_ratios: {train: 0.6, val: 0.2, test: 0.2}
+sequence_length: 10
+window_stride: 6           # train-only stride (see Task 4)
+frame_step: 1
+max_gap_factor: 1.5
+on_duplicate_timestamp: raise
+allow_negative_speed: false
+max_speed_mph: 200
+comma2k19:
+  speed_source: global_pose
+  use_cache: true
+  cache_dir: data/interim/comma2k19
+  cache_image_size: [128, 128]
+  max_segments: null

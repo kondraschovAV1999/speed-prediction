@@ -1,0 +1,14 @@
+# @package data
+source: synthetic
+root: data/processed
+split_manifest: data/splits/synthetic_seed${experiment.seed}.json
+split_ratios: {train: 0.7, val: 0.15, test: 0.15}
+sequence_length: 10        # T frames per window
+window_stride: 1           # stride between window end indices (eval requires 1)
+frame_step: 1              # take every k-th frame inside a window
+frame_rate_hz: 10
+max_gap_factor: 1.5        # dt > factor/frame_rate_hz splits the sequence
+on_duplicate_timestamp: raise   # raise | drop_later
+allow_negative_speed: false
+max_speed_mph: 200
+synthetic: {num_sequences: 12, frames_per_sequence: 120, image_size: [32, 32], noise_std: 0.02}

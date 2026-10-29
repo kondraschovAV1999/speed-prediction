@@ -1,0 +1,4 @@
+# @package model.temporal
+name: gru
+hidden_size: 32
+num_layers: 2

@@ -1,0 +1,5 @@
+# @package model.temporal
+name: convlstm
+hidden_size: 32
+kernel_size: 3
+num_layers: 1

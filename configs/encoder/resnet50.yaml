@@ -1,0 +1,7 @@
+# @package model.encoder
+name: backbone
+backbone: resnet50
+pretrained: true
+feature_dim: 128
+frozen: true
+weights_path: null

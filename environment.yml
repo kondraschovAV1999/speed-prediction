@@ -1,0 +1,34 @@
+# Canonical Conda environment for the speed-estimation pipeline.
+# NOTE: the development harness manages a per-project environment automatically;
+# this file documents the reproducible spec for a fresh machine.
+#
+#   conda env create -f environment.yml
+#   conda activate speed-estimation
+#   python -m pip install -e ".[dev]"
+#
+# PyTorch is installed CPU-first via pip (the PyPI Windows wheels are CPU-only
+# by default); add a CUDA index-url for GPU work.
+name: speed-estimation
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - pip
+  - pip:
+      - torch>=2.2
+      - torchvision>=0.17
+      - lightning>=2.2
+      - torchmetrics>=1.3
+      - numpy
+      - pandas
+      - scikit-learn
+      - matplotlib
+      - hydra-core>=1.3
+      - omegaconf>=2.3
+      - mlflow>=2.10
+      - pyyaml
+      - pytest
+      - pytest-cov
+      - ruff
+      - mypy
