@@ -2,6 +2,6 @@
 name: backbone
 backbone: efficientnet_b0
 pretrained: true
-feature_dim: 1280
+feature_dim: 128
 frozen: true
 weights_path: null

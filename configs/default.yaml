@@ -1,14 +1,20 @@
 defaults:
   - _self_
   - dataset: comma2k19
-  - encoder: efficientnet_b0
-  - temporal: gru
+  - encoder: resnet18
+  - temporal: lstm
+  - visualization: default
   - head: mlp
   - experiment: baseline
   - override hydra/job_logging: disabled   # we configure logging ourselves
   - override hydra/hydra_logging: disabled
 
 hydra:
+  mode: MULTIRUN
+  sweeper:
+    params:
+      encoder: resnet18
+      temporal: gru, lstm, convlstm
   run:
     dir: output/hydra/${now:%Y%m%d_%H%M%S}   # keep Hydra's own files under output/
   job:
@@ -27,7 +33,7 @@ experiment:
 # `data` is provided by the dataset group (see dataset/synthetic.yaml)
 
 preprocessing:
-  image_size: [ 64, 64 ]      # [H, W]
+  image_size: [ 32, 32 ]      # [H, W]
   normalize: true
   mean: [ 0.485, 0.456, 0.406 ]   # fixed constants, NOT fitted on data
   std: [ 0.229, 0.224, 0.225 ]
@@ -41,7 +47,7 @@ training:
   batch_size: 64
   epochs: 100
   learning_rate: 0.002
-  weight_decay: 0.00001
+  weight_decay: 0.00009
   optimizer: adamw
   loss: mse                 # mse | l1 | mae | rmse | huber
   huber_delta: 2.0         # mph; only used when loss=huber
@@ -52,17 +58,18 @@ training:
   devices: 1
   precision: "bf16-mixed"     # bf16 mixed precision (fast path on Ada/4070 Tensor Cores)
   matmul_precision: high      # highest | high (TF32) | medium (bf16 matmul)
-  num_workers: 2
+  num_workers: 0
+
 
 postprocessing:
   clip: { enabled: true, min_mph: 0.0, max_mph: null }
-  smoothing: { method: median, ema_alpha: 0.5, median_window: 5 }   # none | ema | median (causal)
+  smoothing: { method: none, ema_alpha: 0.5, median_window: 5 }   # none | ema | median (causal)
   stationary:
     enabled: true
-    enter_threshold_mph: 2      # speed <= enter for N consecutive frames -> STOPPED
-    exit_threshold_mph: 3       # speed >  exit  for M consecutive frames -> MOVING
+    enter_threshold_mph: 1.5      # speed <= enter for N consecutive frames -> STOPPED
+    exit_threshold_mph: 4       # speed >  exit  for M consecutive frames -> MOVING
     enter_persistence_frames: 2
-    exit_persistence_frames: 4
+    exit_persistence_frames: 5
     initial_state: moving
 
 evaluation:

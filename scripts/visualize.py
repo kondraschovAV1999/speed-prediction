@@ -36,8 +36,19 @@ def main() -> None:
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     sub_dir = paths.figures_dir / timestamp
     sub_paths = replace(paths, figures_dir=sub_dir)
-    figures = generate_all_figures(test_df, result, np.array([], dtype=float), sub_paths)
-    logger.info("event=figures_written count=%d path=%s", len(figures), sub_dir)
+    figures = generate_all_figures(
+        predictions={"test": test_df},
+        results={"test": result},
+        latency_samples=np.array([], dtype=float),
+        paths=sub_paths,
+        cfg=cfg.visualization,
+    )
+
+    logger.info(
+        "event=figures_written count=%d path=%s",
+        len(figures),
+        sub_dir,
+    )
 
 
 if __name__ == "__main__":

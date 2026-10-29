@@ -185,6 +185,28 @@ class TrackingCfg:
 class LoggingCfg:
     level: str = "INFO"
 
+@dataclass
+class TimeseriesCfg:
+    """Configuration for multi-panel time-series figures."""
+
+    width: float = 10.0
+    height_per_sequence: float = 3.0
+
+
+@dataclass
+class VisualizationCfg:
+    """Configuration for evaluation figure generation."""
+    enabled: bool = True
+    # Default figure dimensions, in inches.
+    fig_size: tuple[float, float] = (4.3, 2.7)
+    # Dimensions for vertically stacked time-series figures.
+    timeseries: TimeseriesCfg = field(default_factory=TimeseriesCfg)
+    # Font sizes, in points.
+    font_size: float = 12.0
+    title_font_size: float = 14.0
+    label_font_size: float = 16.0
+    tick_font_size: float = 10.0
+    legend_font_size: float = 10.0
 
 @dataclass
 class Config:
@@ -199,6 +221,7 @@ class Config:
     benchmark: BenchmarkCfg = field(default_factory=BenchmarkCfg)
     tracking: TrackingCfg = field(default_factory=TrackingCfg)
     logging: LoggingCfg = field(default_factory=LoggingCfg)
+    visualization: VisualizationCfg = field(default_factory=VisualizationCfg)
 
 
 # --------------------------------------------------------------------------- #

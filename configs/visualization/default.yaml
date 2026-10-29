@@ -1,0 +1,20 @@
+# Default Matplotlib visualization settings.
+enabled: True
+# Default figure dimensions, in inches.
+fig_size: [4.3, 2.7]
+
+# Figure dimensions for plots with multiple vertically stacked axes.
+timeseries:
+  width: 4.3
+  height_per_sequence: 2.7
+
+# Font sizes, in points.
+font_size: 12
+title_font_size: 14
+label_font_size: 16
+tick_font_size: 10
+legend_font_size: 10
+
+# Export settings.
+dpi: 300
+bbox_inches: tight

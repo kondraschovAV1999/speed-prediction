@@ -2,6 +2,6 @@
 name: backbone
 backbone: resnet18
 pretrained: true
-feature_dim: 512
+feature_dim: 128
 frozen: true
 weights_path: null

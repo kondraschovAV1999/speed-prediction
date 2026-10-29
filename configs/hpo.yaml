@@ -2,7 +2,7 @@
 # Objective: minimize `val/rmse`. Loaded by scripts/hpo.py.
 
 budget:
-  n_trials: 40          # number of Optuna trials
+  n_trials: 50          # number of Optuna trials
   epochs: 25            # max epochs per trial (early stopping applies)
   seed: 42
   study_name: HyperTune1      # optional Optuna study name (for persistent storage)
@@ -15,8 +15,8 @@ search_space:
   # single fixed categorical. Keep values small enough that the convlstm path stays sane.
   feature_dims: [32, 64, 128, 256, 512]
 
-  sequence_length: {low: 5, high: 25, step: 5}
-  window_stride: [1, 2, 5, 10, 20]   # training-only stride; clipped to <= sequence_length
+  sequence_length: {low: 5, high: 40, step: 5}
+  window_stride: [5, 10, 20, 30]   # training-only stride; clipped to <= sequence_length
   weight_decay: {low: 1e-5, high: 1e-2, log: true}
 
   head:
